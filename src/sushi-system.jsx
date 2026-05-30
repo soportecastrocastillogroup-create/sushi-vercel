@@ -876,7 +876,7 @@ function PinModal({ target, onSuccess, onClose }) {
             style={{ flex:1,padding:"10px",background:"#C9A84C",border:"none",
               borderRadius:8,color:"#0A0D0A",fontWeight:700,cursor:"pointer",fontSize:13 }}>Entrar</button>
         </div>
-        <p style={{ color:"#252F28",fontSize:11,marginTop:16 }}>Admin: 1234 · Cocina: 5678</p>
+        {/* <p style={{ color:"#252F28",fontSize:11,marginTop:16 }}>Admin: 1234 · Cocina: 5678</p> */}
       </div>
     </div>
   );
