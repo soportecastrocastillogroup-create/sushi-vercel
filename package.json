@@ -4,9 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "sync:sushi": "cp ../sushi-system.jsx src/sushi-system.jsx",
+    "sync:sushi": "test -f ../sushi-system.jsx && cp ../sushi-system.jsx src/sushi-system.jsx || true",
     "predev": "npm run sync:sushi",
-    "prebuild": "npm run sync:sushi",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
