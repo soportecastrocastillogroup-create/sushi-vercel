@@ -5,16 +5,70 @@ const SUCURSALES = ["Loncoche", "La Paz"];
 const COSTO_DELIVERY = 2000;
 const WHATSAPP_NUM   = "56966390079";
 const MAX_CAMBIOS    = 3;
-const ADMIN_PIN      = "1234";
-const KITCHEN_PIN    = "5678";
+const ADMIN_PIN      = "1421";
+const KITCHEN_PIN    = "1420";
+const MAX_POR_HORARIO = 4;
 
-// ── HORARIOS ─────────────────────────────────────────────────────────────────
-const HORARIOS = [
-  "Lo antes posible",
+// ── FECHAS Y HORARIOS DINÁMICOS ───────────────────────────────────────────────
+const HORARIOS_BASE = [
   "17:30","18:00","18:30",
   "19:00","19:30","20:00","20:30",
   "21:00","21:30",
 ];
+
+// 0=Dom 1=Lun 2=Mar 3=Mié 4=Jue 5=Vie 6=Sáb
+// Miércoles–Sábado abiertos por defecto
+const DIAS_BLOQUEADOS_DEFAULT = [0, 1, 2]; // Dom, Lun, Mar
+const NOMBRES_DIAS = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+
+// Devuelve fechas: hoy + 6 días, marcando cuáles están bloqueadas
+const getFechasDisponibles = (diasDesbloqueados=[]) => {
+  const resultado = [];
+  const hoy = new Date();
+  for(let i=0;i<7;i++){
+    const d = new Date(hoy);
+    d.setDate(hoy.getDate()+i);
+    const iso = d.toISOString().split("T")[0];
+    const dow = d.getDay();
+    const bloqueado = DIAS_BLOQUEADOS_DEFAULT.includes(dow) && !diasDesbloqueados.includes(iso);
+    resultado.push({ iso, dow, bloqueado });
+  }
+  return resultado;
+};
+
+const formatFecha = (iso) => {
+  const d = new Date(iso+"T12:00:00");
+  const dias = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  const hoy = new Date().toISOString().split("T")[0];
+  const manana = new Date(Date.now()+86400000).toISOString().split("T")[0];
+  if(iso===hoy) return `Hoy, ${d.getDate()} ${meses[d.getMonth()]}`;
+  if(iso===manana) return `Mañana, ${d.getDate()} ${meses[d.getMonth()]}`;
+  return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`;
+};
+
+// Horarios disponibles según fecha seleccionada y pedidos existentes
+const getHorariosDisponibles = (fecha, orders) => {
+  const hoy = new Date().toISOString().split("T")[0];
+  const ahora = new Date();
+
+  return HORARIOS_BASE.filter(h => {
+    // Si es hoy, filtrar horarios pasados o con menos de 30 min
+    if(fecha === hoy){
+      const [hh,mm] = h.split(":").map(Number);
+      const limiteMs = new Date();
+      limiteMs.setHours(hh,mm,0,0);
+      const diffMin = (limiteMs - ahora) / 60000;
+      if(diffMin < 30) return false;
+    }
+    // Contar pedidos en ese horario+fecha
+    const count = orders.filter(o =>
+      o.fecha === fecha && o.horario === h &&
+      o.estado !== "entregado"
+    ).length;
+    return count < MAX_POR_HORARIO;
+  });
+};
 
 // ── OPCIONES DE CAMBIOS ──────────────────────────────────────────────────────
 const RELLENOS = [
@@ -63,6 +117,9 @@ const stockInicial = {
   rss1:true, rss2:true,
   // Acompañamientos — pendiente, se agregan cuando estén listos
 };
+
+// Días desbloqueados de forma extraordinaria (array de fechas ISO "YYYY-MM-DD")
+const diasDesbloqueadosInicial = [];
 
 
 const MENU = [
@@ -320,10 +377,14 @@ const getPagos = (tipo) => tipo==="delivery"
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 const fmt   = n=>`$${n.toLocaleString("es-CL")}`;
 const uid   = ()=>`${Date.now()}-${Math.random().toString(36).substr(2,5)}`;
-const newId = ()=>{
-  const d=new Date(),h=d.getHours().toString().padStart(2,"0"),m=d.getMinutes().toString().padStart(2,"0");
-  return `#${h}${m}-${Math.random().toString(36).substr(2,3).toUpperCase()}`;
+
+// Contador secuencial guardado en memoria
+let orderCounter = 0;
+const newId = () => {
+  orderCounter++;
+  return `#${String(orderCounter).padStart(3,"0")}`;
 };
+
 const timeAgo = iso=>{
   const mins=Math.floor((Date.now()-new Date(iso).getTime())/60000);
   if(mins<1) return "ahora"; if(mins<60) return `${mins}m`;
@@ -335,8 +396,8 @@ const cartSubtotal = cart=>cart.reduce((s,i)=>s+itemTotal(i),0);
 const cartTotal    = (cart,tipo)=>cartSubtotal(cart)+(tipo==="delivery"?COSTO_DELIVERY:0);
 const emptyForm    = (fuente="web")=>({
   sucursal:SUCURSALES[0], cart:[], tipo:"retiro", direccion:"",
-  referencia:"", horario:"Lo antes posible",
-  cliente:{nombre:"",telefono:""}, metodoPago:"transferencia",
+  referencia:"", fecha: new Date().toISOString().split("T")[0],
+  horario:"", cliente:{nombre:"",telefono:""}, metodoPago:"transferencia",
   observaciones:"", fuente,
 });
 
@@ -876,7 +937,6 @@ function PinModal({ target, onSuccess, onClose }) {
             style={{ flex:1,padding:"10px",background:"#C9A84C",border:"none",
               borderRadius:8,color:"#0A0D0A",fontWeight:700,cursor:"pointer",fontSize:13 }}>Entrar</button>
         </div>
-        {/* <p style={{ color:"#252F28",fontSize:11,marginTop:16 }}>Admin: 1234 · Cocina: 5678</p> */}
       </div>
     </div>
   );
@@ -1064,7 +1124,7 @@ function OrderCard({ order, onStatusChange }) {
           background:estado.bg,color:estado.color,whiteSpace:"nowrap" }}>{estado.label}</span>
       </div>
       <div style={{ color:"#607860",fontSize:12,marginBottom:6 }}>
-        📍 {order.sucursal} · {order.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro"} · ⏰ {order.horario}
+        📍 {order.sucursal} · {order.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro"} · 📅 {order.fecha?formatFecha(order.fecha):""} · ⏰ {order.horario}
         {order.tipo==="delivery"&&order.direccion&&<span style={{ color:"#405040",marginLeft:4 }}>— {order.direccion}</span>}
         {order.tipo==="delivery"&&order.referencia&&<span style={{ color:"#354035",marginLeft:4 }}>({order.referencia})</span>}
       </div>
@@ -1136,7 +1196,7 @@ function OrderCard({ order, onStatusChange }) {
 }
 
 // ── CUSTOMER VIEW ─────────────────────────────────────────────────────────────
-function CustomerView({ onAddOrder, stock }) {
+function CustomerView({ onAddOrder, stock, orders, diasDesbloqueados=[] }) {
   const [step,setStep]             = useState(1);
   const [form,setForm]             = useState(emptyForm("web"));
   const [lastOrder,setLastOrder]   = useState(null);
@@ -1147,29 +1207,74 @@ function CustomerView({ onAddOrder, stock }) {
   const count = form.cart.reduce((s,i)=>s+i.qty,0);
   const pagos = getPagos(form.tipo);
 
+  const esDiaBloqueado = (iso) => {
+    const d = new Date(iso+"T12:00:00");
+    return DIAS_BLOQUEADOS_DEFAULT.includes(d.getDay()) && !diasDesbloqueados.includes(iso);
+  };
+
+  const todasFechas = getFechasDisponibles(diasDesbloqueados);
+  const fechas = todasFechas.filter(f=>!f.bloqueado);
+  const horariosDisp = getHorariosDisponibles(form.fecha, orders);
+
+  const handleFechaChange = (f) => {
+    const disp = getHorariosDisponibles(f, orders);
+    setForm(prev=>({...prev, fecha:f, horario: disp[0]||""}));
+  };
+
+  useState(()=>{
+    if(!form.horario && horariosDisp.length>0){
+      setForm(f=>({...f, horario: horariosDisp[0]}));
+    }
+  });
+
   const clearForSucursal = s=>{
     const valid=MENU.filter(m=>m.sucursales.includes(s)).map(m=>m.id);
     setForm(f=>({...f,sucursal:s,cart:f.cart.filter(i=>valid.includes(i.productId))}));
   };
 
   const canNext = ()=>{
-    if(step===1) return form.tipo==="retiro"||form.direccion.trim().length>3;
+    if(step===1){
+      if(form.tipo==="delivery" && form.direccion.trim().length<4) return false;
+      if(!form.horario) return false;
+      return true;
+    }
     if(step===2) return count>0;
     if(step===3) return form.cliente.nombre.trim()&&form.cliente.telefono.trim();
     return true;
   };
 
   const handleSubmit = ()=>{
-    const order={...form,items:form.cart,orderId:newId(),estado:"pendiente",
-      fuente:"web",timestamp:new Date().toISOString()};
+    const order={...form, items:form.cart, orderId:newId(), estado:"pendiente",
+      fuente:"web", timestamp:new Date().toISOString()};
     onAddOrder(order);
     setLastOrder(order);
   };
 
   // ── SUCCESS SCREEN ──────────────────────────────────────────────────────────
   if(lastOrder){
-    const {tot:orderTot}=buildComandaData({...lastOrder,items:lastOrder.items});
-    const waText=encodeURIComponent(`¡Hola! Acabo de hacer un pedido 🍣\nN° de orden: ${lastOrder.orderId}\nNombre: ${lastOrder.cliente.nombre}\nTotal: ${fmt(orderTot)}`);
+    const {sub:oSub, del:oDel, tot:oTot}=buildComandaData({...lastOrder,items:lastOrder.items});
+    const pago = getPagos(lastOrder.tipo).find(m=>m.id===lastOrder.metodoPago)?.label||"";
+    const itemsTexto = lastOrder.items.map(i=>{
+      let linea = `• ${i.qty}× ${i.nombre} — ${fmt((i.precio+cambiosCosto(i.cambios))*i.qty)}`;
+      if(i.opcionesStr) linea += `\n  🎯 ${i.opcionesStr}`;
+      if(i.cambios.length>0) linea += `\n  Cambios: ${i.cambios.map(c=>c.nombre).join(", ")}`;
+      return linea;
+    }).join("\n");
+    const waText=encodeURIComponent(
+`¡Hola! Acabo de hacer un pedido en Sushi Loncoche 🍣
+
+N° de orden: ${lastOrder.orderId}
+Nombre: ${lastOrder.cliente.nombre}
+Sucursal: ${lastOrder.sucursal}
+Fecha: ${formatFecha(lastOrder.fecha)}
+Horario: ${lastOrder.horario}
+Tipo: ${lastOrder.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro en local"}${lastOrder.tipo==="delivery"&&lastOrder.direccion?`\nDirección: ${lastOrder.direccion}`:""}
+
+Pedido:
+${itemsTexto}${oDel>0?`\n• Despacho: ${fmt(oDel)}`:""}
+
+Total: ${fmt(oTot)}
+Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaciones}`:""}`);
     return (
       <div style={{ maxWidth:520,margin:"0 auto",padding:"0 16px 40px" }}>
         {/* Hero receipt */}
@@ -1201,22 +1306,27 @@ function CustomerView({ onAddOrder, stock }) {
         <div style={{ padding:"0 0 0" }}>
           {/* Meta row */}
           <div style={{ display:"flex",justifyContent:"space-between",padding:"14px 0",
-            borderBottom:"1px solid #141914" }}>
-            <div style={{ textAlign:"center",flex:1 }}>
+            borderBottom:"1px solid #141914",flexWrap:"wrap",gap:4 }}>
+            <div style={{ textAlign:"center",flex:1,minWidth:80 }}>
               <div style={{ color:"#354035",fontSize:10,letterSpacing:1,marginBottom:3 }}>SUCURSAL</div>
               <div style={{ color:"#C0D0C0",fontSize:13,fontWeight:600 }}>{lastOrder.sucursal}</div>
             </div>
             <div style={{ width:1,background:"#141914" }}/>
-            <div style={{ textAlign:"center",flex:1 }}>
-              <div style={{ color:"#354035",fontSize:10,letterSpacing:1,marginBottom:3 }}>TIPO</div>
-              <div style={{ color:"#C0D0C0",fontSize:13,fontWeight:600 }}>
-                {lastOrder.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro"}
-              </div>
+            <div style={{ textAlign:"center",flex:1,minWidth:80 }}>
+              <div style={{ color:"#354035",fontSize:10,letterSpacing:1,marginBottom:3 }}>FECHA</div>
+              <div style={{ color:"#C0D0C0",fontSize:12,fontWeight:600 }}>{formatFecha(lastOrder.fecha)}</div>
             </div>
             <div style={{ width:1,background:"#141914" }}/>
-            <div style={{ textAlign:"center",flex:1 }}>
+            <div style={{ textAlign:"center",flex:1,minWidth:80 }}>
               <div style={{ color:"#354035",fontSize:10,letterSpacing:1,marginBottom:3 }}>HORARIO</div>
               <div style={{ color:"#C0D0C0",fontSize:13,fontWeight:600 }}>{lastOrder.horario}</div>
+            </div>
+            <div style={{ width:1,background:"#141914" }}/>
+            <div style={{ textAlign:"center",flex:1,minWidth:80 }}>
+              <div style={{ color:"#354035",fontSize:10,letterSpacing:1,marginBottom:3 }}>TIPO</div>
+              <div style={{ color:"#C0D0C0",fontSize:12,fontWeight:600 }}>
+                {lastOrder.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro"}
+              </div>
             </div>
           </div>
 
@@ -1248,7 +1358,12 @@ function CustomerView({ onAddOrder, stock }) {
             borderBottom:"1px solid #141914" }}>
             <span style={{ color:"#F0EBE0",fontWeight:700,fontSize:16,fontFamily:"'Crimson Pro',serif",
               fontStyle:"italic" }}>Total</span>
-            <span style={{ color:"#C9A84C",fontWeight:700,fontSize:20 }}>{fmt(orderTot)}</span>
+            <span style={{ color:"#C9A84C",fontWeight:700,fontSize:20 }}>{fmt(oTot)}</span>
+          </div>
+          <div style={{ padding:"10px 0",borderBottom:"1px solid #141914",
+            display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+            <span style={{ color:"#354035",fontSize:12 }}>Método de pago</span>
+            <span style={{ color:"#C0D0C0",fontSize:13,fontWeight:600 }}>{pago}</span>
           </div>
 
           {lastOrder.observaciones&&(
@@ -1316,7 +1431,7 @@ function CustomerView({ onAddOrder, stock }) {
         <div>
           <h2 style={{ color:"#F0EBE0",fontFamily:"'Crimson Pro',serif",fontSize:24,
             marginBottom:24,fontWeight:400,fontStyle:"italic" }}>
-            ¿Dónde retirás o recibís?
+            ¿Dónde retiras o recibes?
           </h2>
 
           {SUCURSALES.length>1&&(
@@ -1378,31 +1493,67 @@ function CustomerView({ onAddOrder, stock }) {
             </>
           )}
 
-          {/* Horario — destacado */}
+          {/* Fecha */}
+          <div style={{ background:"#141914",borderRadius:10,border:"1px solid #252F28",
+            padding:"14px 16px",marginBottom:8 }}>
+            <label style={{ color:"#C9A84C",fontSize:11,letterSpacing:1,
+              display:"block",marginBottom:8,fontWeight:700 }}>
+              📅 FECHA DEL PEDIDO
+            </label>
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+              {fechas.map(({iso})=>{
+                const disp=getHorariosDisponibles(iso,orders);
+                const agotado=disp.length===0;
+                return (
+                  <button key={iso} onClick={()=>!agotado&&handleFechaChange(iso)}
+                    disabled={agotado}
+                    style={{ padding:"8px 14px",borderRadius:8,border:"2px solid",cursor:agotado?"not-allowed":"pointer",
+                      fontSize:12,fontWeight:form.fecha===iso?700:400,
+                      borderColor:form.fecha===iso?"#C9A84C":agotado?"#1A0D0D":"#1E2820",
+                      background:form.fecha===iso?"#C9A84C14":agotado?"#0D0808":"#0A0D0A",
+                      color:form.fecha===iso?"#C9A84C":agotado?"#503030":"#607060",
+                      opacity:agotado?0.5:1 }}>
+                    {formatFecha(iso)}{agotado?" (sin cupos)":""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Horario */}
           <div style={{ background:"#141914",borderRadius:10,border:"1px solid #252F28",
             padding:"14px 16px",marginBottom:4 }}>
             <label style={{ color:"#C9A84C",fontSize:11,letterSpacing:1,
               display:"block",marginBottom:8,fontWeight:700 }}>
               ⏰ HORARIO DE PEDIDO
             </label>
-            <select value={form.horario} onChange={e=>setForm(f=>({...f,horario:e.target.value}))}
-              style={{ ...iS,border:"1px solid #303A30",fontSize:16,fontWeight:600,
-                color:form.horario==="Lo antes posible"?"#607060":"#F0EBE0",
-                cursor:"pointer",background:"#0A0D0A" }}>
-              {HORARIOS.map(h=><option key={h} value={h}>{h}</option>)}
-            </select>
-            {form.horario==="Lo antes posible"&&(
-              <div style={{ marginTop:8,display:"flex",alignItems:"flex-start",gap:6 }}>
-                <span style={{ fontSize:12 }}>⚠️</span>
-                <p style={{ color:"#706030",fontSize:12,lineHeight:1.5,margin:0 }}>
-                  Si no seleccionas un horario, tu pedido se preparará lo antes posible. 
-                  Selecciona una hora si querés recibirlo a un horario específico.
-                </p>
+            {horariosDisp.length===0 ? (
+              <div style={{ color:"#904040",fontSize:13,padding:"8px 0" }}>
+                No hay horarios disponibles para este día. Elige otra fecha.
+              </div>
+            ) : (
+              <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+                {horariosDisp.map(h=>{
+                  const pedidosEnSlot = orders.filter(o=>o.fecha===form.fecha&&o.horario===h&&o.estado!=="entregado").length;
+                  const disponibles = MAX_POR_HORARIO - pedidosEnSlot;
+                  return (
+                    <button key={h} onClick={()=>setForm(f=>({...f,horario:h}))}
+                      style={{ padding:"8px 16px",borderRadius:8,border:"2px solid",cursor:"pointer",
+                        fontSize:14,fontWeight:form.horario===h?700:400,
+                        borderColor:form.horario===h?"#C9A84C":"#1E2820",
+                        background:form.horario===h?"#C9A84C14":"#0A0D0A",
+                        color:form.horario===h?"#C9A84C":"#607060" }}>
+                      {h}
+                      {disponibles<=2&&<span style={{ fontSize:10,marginLeft:4,
+                        color:form.horario===h?"#A07030":"#806040" }}>({disponibles} cupos)</span>}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
-          <p style={{ color:"#354035",fontSize:11,marginTop:6,marginBottom:20 }}>
-            Horario de atención: 17:15 — 21:30
+          <p style={{ color:"#354035",fontSize:11,marginBottom:20 }}>
+            Horario de atención: 17:30 — 21:30 · Máximo {MAX_POR_HORARIO} pedidos por horario
           </p>
         </div>
       )}
@@ -1601,11 +1752,12 @@ function CustomerView({ onAddOrder, stock }) {
 }
 
 // ── ADMIN VIEW ────────────────────────────────────────────────────────────────
-function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock }) {
+function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock, diasDesbloqueados=[], onToggleDia }) {
   const [fSuc,setFSuc]=useState("all");
   const [fEst,setFEst]=useState("all");
   const [showM,setShowM]=useState(false);
   const [showStock,setShowStock]=useState(false);
+  const [showDias,setShowDias]=useState(false);
   const [mf,setMf]=useState(emptyForm("presencial"));
 
   const filtered=orders
@@ -1660,6 +1812,12 @@ function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock })
           {Object.entries(ESTADOS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
         </select>
         <div style={{ flex:1 }}/>
+        <button onClick={()=>setShowDias(s=>!s)}
+          style={{ padding:"8px 14px",background:showDias?"#60A5FA18":"transparent",
+            border:`1px solid ${showDias?"#60A5FA":"#1E2820"}`,borderRadius:8,
+            color:showDias?"#60A5FA":"#607060",cursor:"pointer",fontSize:13,whiteSpace:"nowrap" }}>
+          📅 Días
+        </button>
         <button onClick={()=>setShowStock(s=>!s)}
           style={{ padding:"8px 14px",background:showStock?"#C9A84C18":"transparent",
             border:`1px solid ${showStock?"#C9A84C":"#1E2820"}`,borderRadius:8,
@@ -1672,6 +1830,53 @@ function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock })
           + Pedido manual
         </button>
       </div>
+
+      {/* Días panel */}
+      {showDias&&(
+        <div style={{ background:"#141914",borderRadius:12,border:"1px solid #1E3050",
+          padding:16,marginBottom:20 }}>
+          <div style={{ color:"#60A5FA",fontSize:12,fontWeight:700,letterSpacing:1,marginBottom:4 }}>
+            DÍAS DE ATENCIÓN — próximos 7 días
+          </div>
+          <p style={{ color:"#354050",fontSize:11,marginBottom:12 }}>
+            Lun, Mar y Dom están bloqueados por defecto. Activá un día puntual si van a trabajar excepcionalmente.
+          </p>
+          <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+            {getFechasDisponibles(diasDesbloqueados).map(({iso,dow,bloqueado})=>{
+              const desbloqueadoManual = diasDesbloqueados.includes(iso);
+              const esPorDefecto = !DIAS_BLOQUEADOS_DEFAULT.includes(dow);
+              return (
+                <div key={iso} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"10px 14px",background:"#0A0D0A",borderRadius:8,
+                  border:`1px solid ${bloqueado?"#3A1A1A":esPorDefecto?"#1A3A1A":"#1A2A3A"}` }}>
+                  <div>
+                    <span style={{ color:bloqueado?"#604040":esPorDefecto?"#70C070":"#70A0D0",
+                      fontSize:13,fontWeight:600 }}>
+                      {NOMBRES_DIAS[dow]}
+                    </span>
+                    <span style={{ color:"#354035",fontSize:12,marginLeft:8 }}>{formatFecha(iso)}</span>
+                    {esPorDefecto&&<span style={{ color:"#3A6A3A",fontSize:10,marginLeft:8 }}>día habitual</span>}
+                    {desbloqueadoManual&&<span style={{ color:"#4080C0",fontSize:10,marginLeft:8 }}>desbloqueado manualmente</span>}
+                  </div>
+                  {!esPorDefecto&&(
+                    <button onClick={()=>onToggleDia(iso)}
+                      style={{ padding:"6px 14px",borderRadius:20,border:"1px solid",
+                        cursor:"pointer",fontSize:12,fontWeight:700,
+                        borderColor:desbloqueadoManual?"#3A5A7A":"#5A3A3A",
+                        background:desbloqueadoManual?"#1A2A3A":"#2A1A1A",
+                        color:desbloqueadoManual?"#70A0D0":"#C07070" }}>
+                      {desbloqueadoManual?"● Abierto":"○ Cerrado"}
+                    </button>
+                  )}
+                  {esPorDefecto&&(
+                    <span style={{ color:"#2A4A2A",fontSize:11 }}>siempre abierto</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stock panel */}
       {showStock&&(
@@ -1801,11 +2006,18 @@ function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock })
                   onChange={e=>setMf(m=>({...m,referencia:e.target.value}))}/>
               </div>
             </>)}
+            <div style={{ marginBottom:14 }}>
+              <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:6 }}>FECHA</label>
+              <select value={mf.fecha||new Date().toISOString().split("T")[0]}
+                onChange={e=>setMf(m=>({...m,fecha:e.target.value}))} style={iS}>
+                {getFechasDisponibles().map(f=><option key={f} value={f}>{formatFecha(f)}</option>)}
+              </select>
+            </div>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14 }}>
               <div>
                 <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:6 }}>HORARIO</label>
                 <select value={mf.horario} onChange={e=>setMf(m=>({...m,horario:e.target.value}))} style={iS}>
-                  {HORARIOS.map(h=><option key={h} value={h}>{h}</option>)}
+                  {HORARIOS_BASE.map(h=><option key={h} value={h}>{h}</option>)}
                 </select>
               </div>
               <div>
@@ -1862,7 +2074,7 @@ function KitchenCard({ order, onStatusChange }) {
         <span style={{ color:"#50605A",fontSize:11 }}>{timeAgo(order.timestamp)}</span>
       </div>
       <div style={{ color:"#405040",fontSize:11,marginBottom:6 }}>
-        {order.sucursal} · {order.tipo==="delivery"?"🚗":"🏪"} · {order.horario}
+        {order.sucursal} · {order.tipo==="delivery"?"🚗":"🏪"} · {order.fecha?formatFecha(order.fecha):""} · {order.horario}
       </div>
       <div style={{ color:"#90A090",fontSize:13,marginBottom:8,fontWeight:600 }}>
         {order.cliente.nombre||"Cliente"}
@@ -1969,6 +2181,7 @@ export default function App() {
   const [view,setView]           = useState("customer");
   const [orders,setOrders]       = useState([]);
   const [stock,setStock]         = useState(stockInicial);
+  const [diasDesbloqueados,setDiasDesbloqueados] = useState(diasDesbloqueadosInicial);
   const [loaded,setLoaded]       = useState(false);
   const [pinTarget,setPinTarget] = useState(null);
   const [adminOk,setAdminOk]     = useState(false);
@@ -1981,6 +2194,8 @@ export default function App() {
         if(r) setOrders(JSON.parse(r.value));
         const s=await window.storage.get("sushi-stock");
         if(s) setStock(JSON.parse(s.value));
+        const dd=await window.storage.get("sushi-dias");
+        if(dd) setDiasDesbloqueados(JSON.parse(dd.value));
       }catch(_){}
       setLoaded(true);
     })();
@@ -1993,6 +2208,10 @@ export default function App() {
     if(!loaded) return;
     (async()=>{ try{ await window.storage.set("sushi-stock",JSON.stringify(stock)); }catch(_){} })();
   },[stock,loaded]);
+  useEffect(()=>{
+    if(!loaded) return;
+    (async()=>{ try{ await window.storage.set("sushi-dias",JSON.stringify(diasDesbloqueados)); }catch(_){} })();
+  },[diasDesbloqueados,loaded]);
 
   const addOrder  = o=>setOrders(p=>[{...o,id:uid()},...p]);
   const updStatus = (id,estado)=>setOrders(p=>p.map(o=>o.id===id?{...o,estado}:o));
@@ -2052,8 +2271,8 @@ export default function App() {
           </div>
         </div>
       </div>
-      {view==="customer"&&<CustomerView onAddOrder={addOrder} stock={stock}/>}
-      {view==="admin"   &&<AdminView orders={orders} onAddOrder={addOrder} onStatusChange={updStatus} stock={stock} onToggleStock={id=>setStock(s=>({...s,[id]:!s[id]}))}/>}
+      {view==="customer"&&<CustomerView onAddOrder={addOrder} stock={stock} orders={orders} diasDesbloqueados={diasDesbloqueados}/>}
+      {view==="admin"   &&<AdminView orders={orders} onAddOrder={addOrder} onStatusChange={updStatus} stock={stock} onToggleStock={id=>setStock(s=>({...s,[id]:!s[id]}))} diasDesbloqueados={diasDesbloqueados} onToggleDia={iso=>setDiasDesbloqueados(prev=>prev.includes(iso)?prev.filter(d=>d!==iso):[...prev,iso])}/>}
       {view==="kitchen" &&<KitchenView orders={orders} onStatusChange={updStatus}/>}
       {pinTarget&&<PinModal target={pinTarget} onSuccess={onPinOk} onClose={()=>setPinTarget(null)}/>}
     </div>
