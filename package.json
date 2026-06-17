@@ -4,14 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "sync:sushi": "test -f ../sushi-system.jsx && cp ../sushi-system.jsx src/sushi-system.jsx || true",
-    "predev": "npm run sync:sushi",
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
