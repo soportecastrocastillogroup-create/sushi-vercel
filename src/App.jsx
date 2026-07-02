@@ -36,6 +36,8 @@ export default function App() {
     reload: reloadOrders,
     addOrder,
     updStatus,
+    delOrder,
+    updOrder,
   } = useOrders(settings?.costoDelivery ?? 0);
 
   const loaded = !catalogLoading && !settingsLoading && !stockLoading && !ordersLoading;
@@ -157,6 +159,8 @@ export default function App() {
           orders={orders}
           onAddOrder={addOrder}
           onStatusChange={updStatus}
+          onDeleteOrder={delOrder}
+          onUpdateOrder={updOrder}
           stock={stock}
           onToggleStock={toggleStock}
           diasDesbloqueados={diasDesbloqueados}

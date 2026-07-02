@@ -16,10 +16,19 @@ const categories = [
   { id: "promos", name: "Promos", sort_order: 1 },
   { id: "handrolls", name: "Handrolls", sort_order: 2 },
   { id: "rolls", name: "Rolls", sort_order: 3 },
-  { id: "acompanamientos", name: "Acompañamientos", sort_order: 4 },
+  { id: "para_picar", name: "Para Picar", sort_order: 4 },
+  { id: "bebestibles", name: "Bebestibles", sort_order: 5 },
 ];
 
-const catMap = { Promos: "promos", Handrolls: "handrolls", Rolls: "rolls", Acompañamientos: "acompanamientos" };
+const catMap = {
+  Promos: "promos",
+  Handrolls: "handrolls",
+  Rolls: "rolls",
+  "Para Picar": "para_picar",
+  Bebestibles: "bebestibles",
+};
+
+const branchId = (name) => name.toLowerCase().replace(/ /g, "_");
 
 const products = [
   { id:"p1", cat:"Promos", nombre:"Promo 1", precio:14000, piezas:30, rolls:[{envoltura:"Queso Crema",relleno:"Pollo apanado, palta, queso crema, frutos secos"},{envoltura:"Panko",relleno:"Camarón, champiñón, queso crema"},{envoltura:"Sésamo",relleno:"Pollo, palta, queso crema"}] },
@@ -50,6 +59,44 @@ const products = [
   { id:"rcb2", cat:"Rolls", nombre:"Roll de Ciboulette", precio:6500, piezas:10, envolturaActual:"Ciboulette", desc:"Camarón apanado, queso crema y palta" },
   { id:"rss1", cat:"Rolls", nombre:"Roll de Sésamo", precio:5000, piezas:10, envolturaActual:"Sésamo", desc:"Pollo, queso crema y palta" },
   { id:"rss2", cat:"Rolls", nombre:"Roll de Sésamo", precio:6000, piezas:10, envolturaActual:"Sésamo", desc:"Camarón apanado, cebollín y queso crema" },
+  { id:"pp1", cat:"Para Picar", nombre:"Empanada de queso — 4u", precio:2500, piezas:4, sucursales:["La Paz"], desc:"Media luna, frita" },
+  { id:"pp2", cat:"Para Picar", nombre:"Empanada de queso — 8u", precio:4700, piezas:8, sucursales:["La Paz"], desc:"Media luna, frita" },
+  { id:"pp3", cat:"Para Picar", nombre:"Arrollado primavera — 4u", precio:3000, piezas:4, sucursales:["La Paz"], desc:"Frito, verduras" },
+  { id:"pp4", cat:"Para Picar", nombre:"Arrollado primavera — 8u", precio:5700, piezas:8, sucursales:["La Paz"], desc:"Frito, verduras" },
+  { id:"pp5", cat:"Para Picar", nombre:"Arrollado jamón y queso — 4u", precio:3000, piezas:4, sucursales:["La Paz"], desc:"Frito" },
+  { id:"pp6", cat:"Para Picar", nombre:"Arrollado jamón y queso — 8u", precio:5700, piezas:8, sucursales:["La Paz"], desc:"Frito" },
+  { id:"pp7", cat:"Para Picar", nombre:"Guantán — 8u", precio:2000, piezas:8, sucursales:["La Paz"], desc:"Frito" },
+  { id:"bg1", cat:"Bebestibles", nombre:"Tropical Gin", precio:7000, sucursales:["La Paz"], desc:"Gin con jugo tropical" },
+  { id:"bg2", cat:"Bebestibles", nombre:"Gin de Verano", precio:7000, sucursales:["La Paz"], desc:"Gin refrescante de temporada" },
+  { id:"bg3", cat:"Bebestibles", nombre:"Dragon Gin", precio:7000, sucursales:["La Paz"], desc:"Gin premium" },
+  { id:"bg4", cat:"Bebestibles", nombre:"Galaxy Gin", precio:7000, sucursales:["La Paz"], desc:"Gin premium" },
+  { id:"bg5", cat:"Bebestibles", nombre:"Blue North Gin", precio:7000, sucursales:["La Paz"], desc:"Gin premium" },
+  { id:"bm1", cat:"Bebestibles", nombre:"Mojito Tradicional", precio:5000, sucursales:["La Paz"], desc:"Clásico con hierba buena" },
+  { id:"bm2", cat:"Bebestibles", nombre:"Mojito Frambuesa", precio:6000, sucursales:["La Paz"], desc:"Con sabor a frambuesa" },
+  { id:"bm3", cat:"Bebestibles", nombre:"Mojito Mango", precio:6000, sucursales:["La Paz"], desc:"Con sabor a mango" },
+  { id:"bm4", cat:"Bebestibles", nombre:"Mojito Maracuyá", precio:6000, sucursales:["La Paz"], desc:"Con sabor a maracuyá" },
+  { id:"bsa1", cat:"Bebestibles", nombre:"Sin Alcohol Tradicional", precio:5000, sucursales:["La Paz"], desc:"Versión sin alcohol" },
+  { id:"bsa2", cat:"Bebestibles", nombre:"Sin Alcohol Frambuesa", precio:5000, sucursales:["La Paz"], desc:"Sin alcohol, sabor frambuesa" },
+  { id:"bsa3", cat:"Bebestibles", nombre:"Sin Alcohol Mango", precio:5000, sucursales:["La Paz"], desc:"Sin alcohol, sabor mango" },
+  { id:"bsa4", cat:"Bebestibles", nombre:"Sin Alcohol Maracuyá", precio:5000, sucursales:["La Paz"], desc:"Sin alcohol, sabor maracuyá" },
+  { id:"bc1", cat:"Bebestibles", nombre:"Dólar de Maqui", precio:1000, sucursales:["La Paz"], desc:"Cerveza artesanal" },
+  { id:"bc2", cat:"Bebestibles", nombre:"Austral Calafate", precio:1000, sucursales:["La Paz"], desc:"Cerveza artesanal" },
+  { id:"bc3", cat:"Bebestibles", nombre:"Guzmán Toroballo", precio:1000, sucursales:["La Paz"], desc:"Cerveza artesanal" },
+  { id:"bc4", cat:"Bebestibles", nombre:"Cusqueña Golden", precio:2500, sucursales:["La Paz"], desc:"Cerveza importada" },
+  { id:"bch1", cat:"Bebestibles", nombre:"Chelada", precio:1000, sucursales:["La Paz"], desc:"Cerveza con limón" },
+  { id:"bch2", cat:"Bebestibles", nombre:"Michelada", precio:1000, sucursales:["La Paz"], desc:"Cerveza con jugo de tomate" },
+  { id:"bch3", cat:"Bebestibles", nombre:"Michelada Completa", precio:1500, sucursales:["La Paz"], desc:"Michelada con extras" },
+  { id:"bp1", cat:"Bebestibles", nombre:"Pisco Sour", precio:5000, sucursales:["La Paz"], desc:"Pisco, limón, azúcar y hielo" },
+  { id:"bp2", cat:"Bebestibles", nombre:"Pisco con Bebida", precio:5500, sucursales:["La Paz"], desc:"Pisco con bebida a elección" },
+  { id:"bw1", cat:"Bebestibles", nombre:"Whisky con Bebida", precio:6000, sucursales:["La Paz"], desc:"Whisky con bebida a elección" },
+  { id:"bb1", cat:"Bebestibles", nombre:"Coca-Cola", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb2", cat:"Bebestibles", nombre:"Coca-Cola Zero", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb3", cat:"Bebestibles", nombre:"Pepsi", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb4", cat:"Bebestibles", nombre:"Pepsi Light", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb5", cat:"Bebestibles", nombre:"Fanta", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb6", cat:"Bebestibles", nombre:"Sprite", precio:1500, sucursales:["La Paz"], desc:"350ml" },
+  { id:"bb7", cat:"Bebestibles", nombre:"Canada Dry", precio:1500, sucursales:["La Paz"], desc:"Ginger Ale 350ml" },
+  { id:"be1", cat:"Bebestibles", nombre:"Red Bull — variedades", precio:2500, sucursales:["La Paz"], desc:"Traditional, Yellow, Purple, Green, Blue, Red o Pomelo" },
 ];
 
 const customizations = [
@@ -75,7 +122,13 @@ const customizations = [
   { id:"solo_pollo", tipo:"especial", nombre:"Toda la promo solo pollo", precio:500, sort_order:1 },
 ];
 
-const timeSlots = ["17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30"];
+const timeSlots = [
+  "17:00","17:15","17:30","17:45",
+  "18:00","18:15","18:30","18:45",
+  "19:00","19:15","19:30","19:45",
+  "20:00","20:15","20:30","20:45",
+  "21:00","21:15","21:30",
+];
 const blockedWeekdays = [0, 1, 2];
 
 const esc = (s) => (s ?? "").replace(/'/g, "''");
@@ -241,7 +294,7 @@ $$;
 let seed = "";
 
 seed += `INSERT INTO branches (id, name, sort_order) VALUES\n`;
-seed += branches.map((b, i) => `  ('${esc(b.toLowerCase().replace(/ /g, "_"))}', '${esc(b)}', ${i + 1})`).join(",\n");
+seed += branches.map((b, i) => `  ('${branchId(b)}', '${esc(b)}', ${i + 1})`).join(",\n");
 seed += `\nON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order;\n\n`;
 
 seed += `INSERT INTO categories (id, name, sort_order) VALUES\n`;
@@ -277,8 +330,9 @@ products.forEach((p, idx) => {
   seed += `INSERT INTO products (id, category_id, nombre, precio, piezas, desc_text, envoltura_actual, sort_order)
 VALUES ('${p.id}', '${catId}', '${esc(p.nombre)}', ${p.precio}, ${p.piezas ?? "NULL"}, ${p.desc ? `'${esc(p.desc)}'` : "NULL"}, ${p.envolturaActual ? `'${esc(p.envolturaActual)}'` : "NULL"}, ${idx + 1})
 ON CONFLICT (id) DO UPDATE SET category_id = EXCLUDED.category_id, nombre = EXCLUDED.nombre, precio = EXCLUDED.precio, piezas = EXCLUDED.piezas, desc_text = EXCLUDED.desc_text, envoltura_actual = EXCLUDED.envoltura_actual, sort_order = EXCLUDED.sort_order;\n`;
-  branches.forEach((b) => {
-    const bid = b.toLowerCase().replace(/ /g, "_");
+  const productBranches = p.sucursales || branches;
+  productBranches.forEach((b) => {
+    const bid = branchId(b);
     seed += `INSERT INTO product_branches (product_id, branch_id) VALUES ('${p.id}', '${bid}') ON CONFLICT DO NOTHING;\n`;
     seed += `INSERT INTO product_stock (product_id, available) VALUES ('${p.id}', true) ON CONFLICT (product_id) DO NOTHING;\n`;
   });

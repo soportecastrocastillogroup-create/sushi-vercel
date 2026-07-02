@@ -123,3 +123,23 @@ export async function updateOrderStatus(id, estado) {
     .eq("id", id);
   if (error) throw error;
 }
+
+export async function deleteOrder(id) {
+  const { error } = await supabase.from("orders").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateOrder(id, changes) {
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      estado: changes.estado,
+      direccion: changes.direccion || "",
+      horario: changes.horario,
+      cliente_nombre: changes.cliente?.nombre || "",
+      cliente_telefono: changes.cliente?.telefono || "",
+      observaciones: changes.observaciones || "",
+    })
+    .eq("id", id);
+  if (error) throw error;
+}

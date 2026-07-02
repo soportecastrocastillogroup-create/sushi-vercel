@@ -9,7 +9,7 @@ export default function CustomizationModal({ product, onConfirm, onClose, custom
   const [tab,setTab]           = useState(initialTab);
   const [cambios,setCambios]   = useState([]);
   const [salsaQty,setSalsaQty] = useState({});
-  const [handrollSabor,setHandrollSabor] = useState("");
+  const [handrollSabores,setHandrollSabores] = useState(Array.from({length:product.piezas||1},()=>""));
   const [opcionesSeleccionadas,setOpcionesSeleccionadas] = useState({}); // { opcionIdx: choiceStr }
   const [obsModal,setObsModal] = useState("");
 
@@ -21,8 +21,7 @@ export default function CustomizationModal({ product, onConfirm, onClose, custom
       return Array.from({length:q},()=>({...s,tipo:"salsa"}));
     });
 
-  const totalCambios = cambiosCosto(cambios) + salsasCambios.reduce((s,c)=>s+c.precio,0)
-    + (handrollSabor?0:0); // handroll choice is free
+  const totalCambios = cambiosCosto(cambios) + salsasCambios.reduce((s,c)=>s+c.precio,0);
   const canAdd = cambios.length<settings.maxCambios;
 
   const toggle = (opt,tipo)=>{
@@ -46,7 +45,10 @@ export default function CustomizationModal({ product, onConfirm, onClose, custom
   }[tab];
 
   const handleConfirm = ()=>{
-    if(isHandroll && !handrollSabor) return alert("Elige palta o cebollín para tu handroll");
+    if(isHandroll){
+      const sin = handrollSabores.findIndex(s=>!s);
+      if(sin>=0) return alert(`Elige el sabor del handroll ${sin+1}`);
+    }
     // validate opciones
     if(product.opciones){
       for(let i=0;i<product.opciones.length;i++){
@@ -54,7 +56,7 @@ export default function CustomizationModal({ product, onConfirm, onClose, custom
       }
     }
     const allCambios = [...cambios, ...salsasCambios];
-    onConfirm(allCambios, obsModal, handrollSabor, opcionesSeleccionadas);
+    onConfirm(allCambios, obsModal, handrollSabores, opcionesSeleccionadas);
   };
 
   return (
@@ -102,47 +104,51 @@ export default function CustomizationModal({ product, onConfirm, onClose, custom
             </div>
           </div>
 
-          {/* Handroll: sabor choice */}
+          {/* Handroll: sabor por unidad */}
           {isHandroll&&(
             <div style={{ marginTop:10 }}>
               <div style={{ color:"#3A5A3A",fontSize:11,letterSpacing:1,marginBottom:8 }}>
-                ELIGE TU SABOR — obligatorio
+                ELIGE EL SABOR DE CADA HANDROLL — obligatorio
               </div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
-                {[
-                  {id:"palta",   label:"Pollo, palta y queso crema"},
-                  {id:"cebollin",label:"Pollo, queso crema y cebollín"},
-                ].map(s=>(
-                  <button key={s.id} onClick={()=>setHandrollSabor(s.id)}
-                    style={{ padding:"12px 10px",borderRadius:10,border:"2px solid",cursor:"pointer",
-                      textAlign:"center",
-                      borderColor:handrollSabor===s.id?"#C9A84C":"#1A221A",
-                      background:handrollSabor===s.id?"#C9A84C14":"#0D120D",
-                      color:handrollSabor===s.id?"#C9A84C":"#8AA080",
-                      fontWeight:handrollSabor===s.id?700:400,fontSize:12,lineHeight:1.4 }}>
-                    {handrollSabor===s.id?"✓ ":""}{s.label}
-                  </button>
-                ))}
-              </div>
+              {Array.from({length:product.piezas||1},(_,i)=>(
+                <div key={i} style={{ marginBottom:8 }}>
+                  <div style={{ color:"#50605A",fontSize:11,marginBottom:4 }}>Handroll {i+1}</div>
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6 }}>
+                    {[{id:"palta",label:"Pollo, palta y queso crema"},{id:"cebollin",label:"Pollo, queso crema y cebollín"}].map(s=>{
+                      const sel=(handrollSabores[i]||"")===s.id;
+                      return (
+                        <button key={s.id}
+                          onClick={()=>setHandrollSabores(prev=>{const n=[...prev];n[i]=s.id;return n;})}
+                          style={{ padding:"10px 8px",borderRadius:10,border:"2px solid",cursor:"pointer",
+                            textAlign:"center",fontSize:12,lineHeight:1.4,
+                            borderColor:sel?"#C9A84C":"#1A221A",background:sel?"#C9A84C14":"#0D120D",
+                            color:sel?"#C9A84C":"#8AA080",fontWeight:sel?700:400 }}>
+                          {sel?"✓ ":""}{s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
           {/* Opciones de envoltura para promos con elección (Promo Fría, Mini Mixta) */}
           {product.opciones&&product.opciones.map((op,opIdx)=>(
-            <div key={opIdx} style={{ marginTop:10 }}>
-              <div style={{ color:"#C9A84C",fontSize:11,letterSpacing:1,marginBottom:6,fontWeight:700 }}>
-                {op.label.toUpperCase()} — sin costo adicional
+            <div key={opIdx} style={{ marginTop:10,padding:"12px 14px",background:"#0D120D",
+              borderRadius:10,border:"1px solid #1A3A1A" }}>
+              <div style={{ color:"#C9A84C",fontSize:12,marginBottom:8,fontWeight:700 }}>
+                🎯 {op.label} — sin costo
               </div>
-              <div style={{ display:"grid",gridTemplateColumns:`repeat(${op.choices.length},1fr)`,gap:8 }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
                 {op.choices.map(choice=>{
                   const sel = opcionesSeleccionadas[opIdx]===choice;
                   return (
                     <button key={choice} onClick={()=>setOpcionesSeleccionadas(prev=>({...prev,[opIdx]:choice}))}
-                      style={{ padding:"11px 8px",borderRadius:10,border:"2px solid",cursor:"pointer",
+                      style={{ padding:"12px 8px",borderRadius:10,border:"2px solid",cursor:"pointer",
                         textAlign:"center",fontWeight:sel?700:400,fontSize:13,
-                        borderColor:sel?"#C9A84C":"#1A221A",
-                        background:sel?"#C9A84C18":"#0D120D",
-                        color:sel?"#C9A84C":"#8AA080" }}>
+                        borderColor:sel?"#C9A84C":"#1A221A",background:sel?"#C9A84C18":"#141914",
+                        color:sel?"#C9A84C":"#A0B8A0" }}>
                       {sel?"✓ ":""}{choice}
                     </button>
                   );

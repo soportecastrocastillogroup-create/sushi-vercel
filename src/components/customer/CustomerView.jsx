@@ -377,7 +377,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             )}
           </div>
           <p style={{ color:"#354035",fontSize:11,marginBottom:20 }}>
-            Horario de atención: 17:30 — 21:30 · Máximo {settings.maxPorHorario} pedidos por horario
+            Horario de atención: 17:00 — 21:30 · Máximo {settings.maxPorHorario} pedidos por horario
           </p>
         </div>
       )}

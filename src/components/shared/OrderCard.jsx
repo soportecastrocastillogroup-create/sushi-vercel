@@ -8,8 +8,9 @@ import { ESTADOS, FUENTES, getPagos } from "../../constants/estados.js";
 import { buildComandaData, ComandaPreview, printComanda } from "./Comanda.jsx";
 
 // ── ORDER CARD (Admin) ────────────────────────────────────────────────────────
-export default function OrderCard({ order, onStatusChange, settings }) {
+export default function OrderCard({ order, onStatusChange, onDelete, onEdit, settings }) {
   const [showPreview,setShowPreview]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(false);
   const estado=ESTADOS[order.estado];
   const { del, tot } = buildComandaData(order, settings.costoDelivery);
   const src=FUENTES.find(f=>f.id===order.fuente)?.label||order.fuente;
@@ -104,6 +105,29 @@ export default function OrderCard({ order, onStatusChange, settings }) {
         <button onClick={()=>printComanda(order, settings.costoDelivery)}
           style={{ padding:"7px 12px",background:"transparent",border:"1px solid #1E2820",
             borderRadius:6,color:"#50605A",cursor:"pointer",fontSize:12 }}>🖨️</button>
+        {onEdit&&(
+          <button onClick={()=>onEdit(order)}
+            style={{ padding:"7px 10px",background:"transparent",border:"1px solid #1E3050",
+              borderRadius:6,color:"#4080C0",cursor:"pointer",fontSize:12 }}>✏️</button>
+        )}
+        {onDelete&&(
+          confirmDelete
+            ? <div style={{ display:"flex",gap:4 }}>
+                <button onClick={()=>onDelete(order.id)}
+                  style={{ padding:"7px 10px",background:"#3A1A1A",border:"1px solid #C06060",
+                    borderRadius:6,color:"#E06060",cursor:"pointer",fontSize:11,fontWeight:700 }}>
+                  Sí, borrar
+                </button>
+                <button onClick={()=>setConfirmDelete(false)}
+                  style={{ padding:"7px 8px",background:"transparent",border:"1px solid #252F28",
+                    borderRadius:6,color:"#607060",cursor:"pointer",fontSize:11 }}>
+                  No
+                </button>
+              </div>
+            : <button onClick={()=>setConfirmDelete(true)}
+                style={{ padding:"7px 10px",background:"transparent",border:"1px solid #3A1A1A",
+                  borderRadius:6,color:"#804040",cursor:"pointer",fontSize:12 }}>🗑️</button>
+        )}
       </div>
       {showPreview&&<ComandaPreview order={order} settings={settings} onClose={()=>setShowPreview(false)}/>}
     </div>

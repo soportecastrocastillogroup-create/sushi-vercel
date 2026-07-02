@@ -7,14 +7,16 @@ import { ESTADOS, FUENTES, getPagos, NOMBRES_DIAS } from "../../constants/estado
 
 import OrderCard from "../shared/OrderCard.jsx";
 import ProductSelector from "../customer/ProductSelector.jsx";
+import { printComanda } from "../shared/Comanda.jsx";
 
 // ── ADMIN VIEW ────────────────────────────────────────────────────────────────
-export default function AdminView({ orders, onAddOrder, onStatusChange, stock, onToggleStock, diasDesbloqueados=[], onToggleDia, menu, customizations, settings, branches, onRefresh }) {
+export default function AdminView({ orders, onAddOrder, onStatusChange, onDeleteOrder, onUpdateOrder, stock, onToggleStock, diasDesbloqueados=[], onToggleDia, menu, customizations, settings, branches, onRefresh }) {
   const [fSuc,setFSuc]=useState("all");
   const [fEst,setFEst]=useState("all");
   const [showM,setShowM]=useState(false);
   const [showStock,setShowStock]=useState(false);
   const [showDias,setShowDias]=useState(false);
+  const [editOrder,setEditOrder]=useState(null);
   const [mf,setMf]=useState(emptyForm("presencial", branches[0]));
 
   const filtered=orders
@@ -217,8 +219,90 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, stock, o
             <div style={{ fontSize:32,marginBottom:8 }}>🍱</div>
             <p style={{ fontSize:14 }}>Sin pedidos con estos filtros</p>
           </div>
-        :filtered.map(o=><OrderCard key={o.id} settings={settings} order={o} onStatusChange={onStatusChange}/>)
+        :filtered.map(o=>(
+          <OrderCard key={o.id} settings={settings} order={o} onStatusChange={onStatusChange}
+            onDelete={onDeleteOrder}
+            onEdit={o=>setEditOrder({...o})}
+          />
+        ))
       }
+
+      {editOrder&&(
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:200,
+          display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"20px 0" }}>
+          <div style={{ background:"#141914",borderRadius:16,border:"1px solid #252F28",
+            padding:24,width:"100%",maxWidth:500,margin:"0 16px" }}>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
+              <h3 style={{ color:"#F0EBE0",fontFamily:"serif",fontSize:20,margin:0,fontWeight:400 }}>
+                Editar pedido {editOrder.orderId}
+              </h3>
+              <button onClick={()=>setEditOrder(null)}
+                style={{ background:"transparent",border:"none",color:"#50605A",fontSize:22,cursor:"pointer" }}>×</button>
+            </div>
+            {[{k:"nombre",l:"NOMBRE",p:"Nombre",f:"cliente"},
+              {k:"telefono",l:"TELÉFONO",p:"+56 9...",f:"cliente"}
+            ].map(({k,l,p,f})=>(
+              <div key={k} style={{ marginBottom:12 }}>
+                <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:4 }}>{l}</label>
+                <input value={f?editOrder[f][k]:editOrder[k]} placeholder={p}
+                  onChange={e=>f
+                    ?setEditOrder(o=>({...o,[f]:{...o[f],[k]:e.target.value}}))
+                    :setEditOrder(o=>({...o,[k]:e.target.value}))}
+                  style={{ width:"100%",padding:"9px 11px",background:"#0A0D0A",border:"1px solid #1E2820",
+                    borderRadius:8,color:"#F0EBE0",fontSize:13,outline:"none",boxSizing:"border-box" }}/>
+              </div>
+            ))}
+            <div style={{ marginBottom:12 }}>
+              <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:4 }}>DIRECCIÓN</label>
+              <input value={editOrder.direccion||""} placeholder="Dirección de entrega"
+                onChange={e=>setEditOrder(o=>({...o,direccion:e.target.value}))}
+                style={{ width:"100%",padding:"9px 11px",background:"#0A0D0A",border:"1px solid #1E2820",
+                  borderRadius:8,color:"#F0EBE0",fontSize:13,outline:"none",boxSizing:"border-box" }}/>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+              <div>
+                <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:4 }}>HORARIO</label>
+                <select value={editOrder.horario}
+                  onChange={e=>setEditOrder(o=>({...o,horario:e.target.value}))}
+                  style={{ width:"100%",padding:"9px",background:"#0A0D0A",border:"1px solid #1E2820",
+                    borderRadius:8,color:"#F0EBE0",fontSize:13,outline:"none" }}>
+                  {settings.timeSlots.map(h=><option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:4 }}>ESTADO</label>
+                <select value={editOrder.estado}
+                  onChange={e=>setEditOrder(o=>({...o,estado:e.target.value}))}
+                  style={{ width:"100%",padding:"9px",background:"#0A0D0A",border:"1px solid #1E2820",
+                    borderRadius:8,color:"#F0EBE0",fontSize:13,outline:"none" }}>
+                  {Object.entries(ESTADOS).map(([k,v])=>(
+                    <option key={k} value={k}>{v.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ marginBottom:20 }}>
+              <label style={{ color:"#50605A",fontSize:11,letterSpacing:1,display:"block",marginBottom:4 }}>OBSERVACIONES</label>
+              <textarea rows={2} value={editOrder.observaciones||""}
+                onChange={e=>setEditOrder(o=>({...o,observaciones:e.target.value}))}
+                style={{ width:"100%",padding:"9px",background:"#0A0D0A",border:"1px solid #1E2820",
+                  borderRadius:8,color:"#F0EBE0",fontSize:13,outline:"none",resize:"none",boxSizing:"border-box" }}/>
+            </div>
+            <div style={{ display:"flex",gap:8 }}>
+              <button onClick={()=>printComanda(editOrder, settings.costoDelivery)}
+                style={{ flex:1,padding:"11px",background:"transparent",border:"1px solid #252F28",
+                  borderRadius:8,color:"#D0E0D0",cursor:"pointer",fontSize:13 }}>
+                🖨️ Reimprimir
+              </button>
+              <button onClick={()=>{ onUpdateOrder(editOrder.id,editOrder); setEditOrder(null); }}
+                style={{ flex:2,padding:"11px",background:"#C9A84C",border:"none",
+                  borderRadius:8,color:"#0A0D0A",fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showM&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:100,

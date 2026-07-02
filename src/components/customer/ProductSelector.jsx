@@ -24,16 +24,25 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
       desc:product.desc||"", cambios:[], obsModal:"", opcionesStr:"", qty:1 });
   };
 
-  const confirmCustom = (cambios, obsModal, handrollSabor, opcionesSeleccionadas)=>{
+  const confirmCustom = (cambios, obsModal, handrollSabores, opcionesSeleccionadas)=>{
     let nombreFinal = modal.nombre;
-    if(handrollSabor) nombreFinal += ` — ${handrollSabor==="palta"?"Palta":"Cebollín"}`;
-    // Build opcionesStr for display in comanda
+    let descFinal = modal.desc||"";
+    if(modal.cat==="Handrolls" && handrollSabores && handrollSabores.length>0){
+      const saboresLabel = {palta:"Palta y queso crema", cebollin:"Queso crema y cebollín"};
+      if(handrollSabores.length===1){
+        nombreFinal = `Handroll — ${saboresLabel[handrollSabores[0]]||handrollSabores[0]}`;
+      } else {
+        const resumen = handrollSabores.map((s,i)=>`#${i+1} ${saboresLabel[s]||s}`).join(", ");
+        nombreFinal = modal.nombre;
+        descFinal = resumen;
+      }
+    }
     const opcionesStr = modal.opciones
-      ? modal.opciones.map((op,i)=>`${op.label.replace("¿Cómo quieres tu ","").replace("?","")}: ${opcionesSeleccionadas?.[i]||"—"}`).join(" · ")
+      ? modal.opciones.map((op,i)=>`${op.choices[0]} o ${op.choices[1]}: ${opcionesSeleccionadas?.[i]||"—"}`).join(" · ")
       : "";
     onAdd({ cartId:uid(), productId:modal.id, nombre:nombreFinal,
       precio:modal.precio, piezas:modal.piezas, cat:modal.cat,
-      desc:modal.desc||"", cambios, obsModal:obsModal||"",
+      desc:descFinal, cambios, obsModal:obsModal||"",
       opcionesStr, qty:1 });
     setModal(null);
   };
