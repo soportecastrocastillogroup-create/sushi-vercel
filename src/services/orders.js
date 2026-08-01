@@ -38,29 +38,17 @@ function mapOrder(row, items) {
 }
 
 export async function fetchOrders() {
+  // Las líneas se piden anidadas (join por la FK order_items.order_id) en vez
+  // de con un .in() sobre los ids: esa lista viajaba en la URL y crecía con
+  // cada pedido hasta superar el límite del gateway y devolver 400.
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("*")
+    .select("*, order_items(*)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   if (!orders.length) return [];
 
-  const { data: items, error: iErr } = await supabase
-    .from("order_items")
-    .select("*")
-    .in(
-      "order_id",
-      orders.map((o) => o.id)
-    );
-  if (iErr) throw iErr;
-
-  const byOrder = {};
-  for (const item of items) {
-    if (!byOrder[item.order_id]) byOrder[item.order_id] = [];
-    byOrder[item.order_id].push(item);
-  }
-
-  return orders.map((o) => mapOrder(o, byOrder[o.id] || []));
+  return orders.map((o) => mapOrder(o, o.order_items || []));
 }
 
 export async function createOrder(order, costoDelivery) {
