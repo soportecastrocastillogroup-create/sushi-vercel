@@ -140,5 +140,6 @@ Los PINs de admin/cocina/reportes viven en `app_settings` y se validan en el cli
 |---|---|
 | Pantalla de error al cargar | Verificar `.env`, schema SQL ejecutado, RLS habilitado |
 | Pedidos no aparecen en otro dispositivo | Pulsar ↻ Actualizar o recargar (sin Realtime) |
+| Error `23505` en `orders_order_number_key` | Ejecutar `supabase/migration-fix-order-number.sql` en Supabase SQL Editor |
 | `get_next_order_number` falla | Verificar que la función y secuencia existen en Supabase |
 | Build falla | `npm run lint` y revisar imports |

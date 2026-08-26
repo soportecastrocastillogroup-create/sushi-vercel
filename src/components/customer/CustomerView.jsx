@@ -15,6 +15,8 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
   const [lastOrder,setLastOrder]       = useState(null);
   const [showPreview,setShowPreview]   = useState(false);
   const [mostrarOtrasFechas,setMostrarOtrasFechas] = useState(false);
+  const [submitting,setSubmitting]     = useState(false);
+  const [submitError,setSubmitError]   = useState("");
 
   const sub   = cartSubtotal(form.cart);
   const tot   = cartTotal(form.cart,form.tipo,settings.costoDelivery);
@@ -48,9 +50,21 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
   };
 
   const handleSubmit = async ()=>{
-    const order={...form, horario: horarioActivo, items:form.cart, estado:"abierto", fuente:"web", timestamp:new Date().toISOString()};
-    const created = await onAddOrder(order);
-    setLastOrder(created);
+    if(submitting) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const order={...form, horario: horarioActivo, items:form.cart, estado:"abierto", fuente:"web", timestamp:new Date().toISOString()};
+      const created = await onAddOrder(order);
+      setLastOrder(created);
+    } catch (error) {
+      setSubmitError(error?.code === "23505"
+        ? "No pudimos generar el numero de pedido. Intenta nuevamente en un momento."
+        : "No pudimos enviar tu pedido. Revisa tu conexion e intenta nuevamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── SUCCESS SCREEN ──────────────────────────────────────────────────────────
@@ -550,6 +564,12 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
       )}
 
       {/* Nav */}
+      {submitError&&(
+        <div role="alert" style={{ marginTop:18,padding:"11px 13px",background:"#2A1212",
+          border:"1px solid #6A2A2A",borderRadius:8,color:"#E8B0B0",fontSize:13,lineHeight:1.5 }}>
+          {submitError}
+        </div>
+      )}
       <div style={{ display:"flex",gap:8,marginTop:24 }}>
         {step>1&&(
           <button onClick={()=>setStep(s=>s-1)}
@@ -564,14 +584,13 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             Continuar →
           </button>
         ):(
-          <button onClick={handleSubmit}
-            style={{ flex:2,padding:"14px",background:"#C9A84C",border:"none",
-              borderRadius:8,color:"#0A0D0A",fontWeight:700,cursor:"pointer",fontSize:15 }}>
-            🍣 Confirmar pedido
+          <button onClick={handleSubmit} disabled={submitting}
+            style={{ flex:2,padding:"14px",background:submitting?"#6A5A30":"#C9A84C",border:"none",
+              borderRadius:8,color:"#0A0D0A",fontWeight:700,cursor:submitting?"wait":"pointer",fontSize:15 }}>
+            {submitting?"Enviando pedido...":"🍣 Confirmar pedido"}
           </button>
         )}
       </div>
     </div>
   );
 }
-

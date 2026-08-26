@@ -279,11 +279,19 @@ CREATE OR REPLACE FUNCTION get_next_order_number()
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
-  n int;
+  n bigint;
 BEGIN
-  n := nextval('order_number_seq');
+  LOOP
+    n := nextval('public.order_number_seq');
+    EXIT WHEN NOT EXISTS (
+      SELECT 1 FROM public.orders
+      WHERE order_number = '#' || lpad(n::text, 3, '0')
+    );
+  END LOOP;
+
   RETURN '#' || lpad(n::text, 3, '0');
 END;
 $$;
