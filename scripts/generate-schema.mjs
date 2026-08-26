@@ -279,12 +279,25 @@ CREATE OR REPLACE FUNCTION get_next_order_number()
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
-  n int;
+  n bigint;
+  candidate text;
 BEGIN
-  n := nextval('order_number_seq');
-  RETURN '#' || lpad(n::text, 3, '0');
+  LOOP
+    n := nextval('public.order_number_seq');
+    candidate := '#' || CASE
+      WHEN n < 1000 THEN lpad(n::text, 3, '0')
+      ELSE n::text
+    END;
+    EXIT WHEN NOT EXISTS (
+      SELECT 1 FROM public.orders
+      WHERE order_number = candidate
+    );
+  END LOOP;
+
+  RETURN candidate;
 END;
 $$;
 
