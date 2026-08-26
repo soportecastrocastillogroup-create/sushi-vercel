@@ -1,4 +1,4 @@
--- Repairs order creation after order_number_seq became out of sync.
+-- Repairs order creation after three-digit padding truncated numbers over 999.
 -- Safe to run more than once. It does not delete or update existing orders.
 
 BEGIN;
@@ -31,16 +31,21 @@ SET search_path = public
 AS $$
 DECLARE
   n bigint;
+  candidate text;
 BEGIN
   LOOP
     n := nextval('public.order_number_seq');
+    candidate := '#' || CASE
+      WHEN n < 1000 THEN lpad(n::text, 3, '0')
+      ELSE n::text
+    END;
     EXIT WHEN NOT EXISTS (
       SELECT 1 FROM public.orders
-      WHERE order_number = '#' || lpad(n::text, 3, '0')
+      WHERE order_number = candidate
     );
   END LOOP;
 
-  RETURN '#' || lpad(n::text, 3, '0');
+  RETURN candidate;
 END;
 $$;
 
