@@ -44,11 +44,11 @@ export default function ReportesView({ orders, settings, branches }) {
   return (
     <div style={{ padding:"20px 16px",maxWidth:900,margin:"0 auto" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8 }}>
-        <h2 style={{ color:"#F0EBE0",fontFamily:"'Crimson Pro',serif",fontSize:22,fontWeight:400,fontStyle:"italic" }}>
+        <h2 style={{ color:"#F5F5F5",fontFamily:"var(--font-display)",fontSize:22,fontWeight:400 }}>
           Reportes de pedidos
         </h2>
         <button onClick={exportCSV}
-          style={{ padding:"8px 16px",background:"#1A3A1A",border:"1px solid #3A6A3A",borderRadius:8,
+          style={{ padding:"8px 16px",background:"#343438",border:"1px solid #636367",borderRadius:8,
             color:"#70C070",cursor:"pointer",fontSize:13,fontWeight:600 }}>
           ⬇ Exportar CSV
         </button>
@@ -57,18 +57,18 @@ export default function ReportesView({ orders, settings, branches }) {
       {/* Filtros */}
       <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
         <input type="date" value={filtroFecha} onChange={e=>setFiltroFecha(e.target.value)}
-          style={{ padding:"8px 10px",background:"#141914",border:"1px solid #1E2820",
-            borderRadius:8,color:"#C0D0C0",fontSize:13,outline:"none" }}/>
+          style={{ padding:"8px 10px",background:"#18181B",border:"1px solid #2C2C31",
+            borderRadius:8,color:"#D0D0D5",fontSize:13,outline:"none" }}/>
         <select value={filtroSuc} onChange={e=>setFiltroSuc(e.target.value)}
-          style={{ padding:"8px 10px",background:"#141914",border:"1px solid #1E2820",
-            borderRadius:8,color:"#C0D0C0",fontSize:13,outline:"none",cursor:"pointer" }}>
+          style={{ padding:"8px 10px",background:"#18181B",border:"1px solid #2C2C31",
+            borderRadius:8,color:"#D0D0D5",fontSize:13,outline:"none",cursor:"pointer" }}>
           <option value="all">Todas las sucursales</option>
           {branches.map(s=><option key={s} value={s}>{s}</option>)}
         </select>
         {(filtroFecha||filtroSuc!=="all")&&(
           <button onClick={()=>{setFiltroFecha("");setFiltroSuc("all");}}
-            style={{ padding:"8px 12px",background:"transparent",border:"1px solid #252F28",
-              borderRadius:8,color:"#607060",cursor:"pointer",fontSize:13 }}>
+            style={{ padding:"8px 12px",background:"transparent",border:"1px solid #34343A",
+              borderRadius:8,color:"#9A9AA2",cursor:"pointer",fontSize:13 }}>
             Limpiar filtros
           </button>
         )}
@@ -77,21 +77,21 @@ export default function ReportesView({ orders, settings, branches }) {
       {/* Resumen */}
       <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:20 }}>
         {[
-          { l:"Pedidos",   v:filtered.length,       c:"#D0E0D0" },
+          { l:"Pedidos",   v:filtered.length,       c:"#DCDCE0" },
           { l:"Completados", v:filtered.filter(o=>o.estado==="completado").length, c:"#34D399" },
-          { l:"Total ventas", v:fmt(totalVentas),   c:"#C9A84C" },
+          { l:"Total ventas", v:fmt(totalVentas),   c:"#E53935" },
         ].map(s=>(
-          <div key={s.l} style={{ background:"#141914",borderRadius:10,padding:"14px",
-            border:"1px solid #1E2820",textAlign:"center" }}>
+          <div key={s.l} style={{ background:"#18181B",borderRadius:10,padding:"14px",
+            border:"1px solid #2C2C31",textAlign:"center" }}>
             <div style={{ color:s.c,fontSize:s.l==="Total ventas"?18:24,fontWeight:700 }}>{s.v}</div>
-            <div style={{ color:"#354035",fontSize:11,marginTop:2 }}>{s.l}</div>
+            <div style={{ color:"#5A5A62",fontSize:11,marginTop:2 }}>{s.l}</div>
           </div>
         ))}
       </div>
 
       {/* Tabla */}
       {filtered.length===0 ? (
-        <div style={{ textAlign:"center",padding:"48px 0",color:"#252F28" }}>
+        <div style={{ textAlign:"center",padding:"48px 0",color:"#34343A" }}>
           <div style={{ fontSize:32,marginBottom:8 }}>📋</div>
           <p>Sin pedidos para este filtro</p>
         </div>
@@ -101,8 +101,8 @@ export default function ReportesView({ orders, settings, branches }) {
             <thead>
               <tr>
                 {["N° Orden","Fecha","Sucursal","Cliente","Tipo","Horario","Productos","Total","Pago","Estado"].map(h=>(
-                  <th key={h} style={{ padding:"8px 10px",textAlign:"left",color:"#50605A",
-                    borderBottom:"1px solid #1E2820",whiteSpace:"nowrap",fontWeight:600,letterSpacing:0.5,fontSize:10 }}>
+                  <th key={h} style={{ padding:"8px 10px",textAlign:"left",color:"#8A8A92",
+                    borderBottom:"1px solid #2C2C31",whiteSpace:"nowrap",fontWeight:600,letterSpacing:0.5,fontSize:10 }}>
                     {h}
                   </th>
                 ))}
@@ -115,35 +115,35 @@ export default function ReportesView({ orders, settings, branches }) {
                 const estadoLabel = o.estado==="completado"?labelCompletado(o.tipo):ESTADOS[o.estado]?.label||o.estado;
                 const estadoColor = ESTADOS[o.estado]?.color||"#6B7280";
                 return (
-                  <tr key={o.id} style={{ borderBottom:"1px solid #141914" }}>
-                    <td style={{ padding:"10px",color:"#F0EBE0",fontFamily:"monospace",fontWeight:700 }}>{o.orderId}</td>
-                    <td style={{ padding:"10px",color:"#A0B0A0",whiteSpace:"nowrap" }}>
+                  <tr key={o.id} style={{ borderBottom:"1px solid #18181B" }}>
+                    <td style={{ padding:"10px",color:"#F5F5F5",fontFamily:"monospace",fontWeight:700 }}>{o.orderId}</td>
+                    <td style={{ padding:"10px",color:"#B8B8BF",whiteSpace:"nowrap" }}>
                       {o.fecha?formatFecha(o.fecha):""}<br/>
-                      <span style={{ color:"#50605A" }}>{new Date(o.timestamp).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"})}</span>
+                      <span style={{ color:"#8A8A92" }}>{new Date(o.timestamp).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"})}</span>
                     </td>
-                    <td style={{ padding:"10px",color:"#A0B0A0" }}>{o.sucursal}</td>
+                    <td style={{ padding:"10px",color:"#B8B8BF" }}>{o.sucursal}</td>
                     <td style={{ padding:"10px" }}>
-                      <div style={{ color:"#D0E0D0" }}>{o.cliente.nombre||"—"}</div>
-                      <div style={{ color:"#50605A" }}>{o.cliente.telefono}</div>
+                      <div style={{ color:"#DCDCE0" }}>{o.cliente.nombre||"—"}</div>
+                      <div style={{ color:"#8A8A92" }}>{o.cliente.telefono}</div>
                     </td>
-                    <td style={{ padding:"10px",color:"#A0B0A0",whiteSpace:"nowrap" }}>
+                    <td style={{ padding:"10px",color:"#B8B8BF",whiteSpace:"nowrap" }}>
                       {o.tipo==="delivery"?"🚗 Delivery":"🏪 Retiro"}
                     </td>
-                    <td style={{ padding:"10px",color:"#A0B0A0",whiteSpace:"nowrap" }}>{o.horario}</td>
+                    <td style={{ padding:"10px",color:"#B8B8BF",whiteSpace:"nowrap" }}>{o.horario}</td>
                     <td style={{ padding:"10px",maxWidth:200 }}>
                       {o.items.map((item,i)=>(
-                        <div key={i} style={{ color:"#8AA080",marginBottom:2 }}>
+                        <div key={i} style={{ color:"#ACACB0",marginBottom:2 }}>
                           {item.qty}× {item.nombre}
-                          {item.opcionesStr&&<span style={{ color:"#C9A84C",marginLeft:4 }}>({item.opcionesStr})</span>}
-                          {item.cambios.length>0&&<span style={{ color:"#607060",marginLeft:4 }}>[{item.cambios.map(c=>c.nombre).join(",")}]</span>}
+                          {item.opcionesStr&&<span style={{ color:"#E53935",marginLeft:4 }}>({item.opcionesStr})</span>}
+                          {item.cambios.length>0&&<span style={{ color:"#9A9AA2",marginLeft:4 }}>[{item.cambios.map(c=>c.nombre).join(",")}]</span>}
                         </div>
                       ))}
-                      {o.observaciones&&<div style={{ color:"#405040",fontSize:11,fontStyle:"italic",marginTop:2 }}>💬 {o.observaciones}</div>}
+                      {o.observaciones&&<div style={{ color:"#6A6A72",fontSize:11,fontStyle:"italic",marginTop:2 }}>💬 {o.observaciones}</div>}
                     </td>
                     <td style={{ padding:"10px",color:"#E03030",fontWeight:700,whiteSpace:"nowrap" }}>{fmt(tot)}</td>
-                    <td style={{ padding:"10px",color:"#607060",fontSize:11 }}>{pago}</td>
+                    <td style={{ padding:"10px",color:"#9A9AA2",fontSize:11 }}>{pago}</td>
                     <td style={{ padding:"10px",whiteSpace:"nowrap" }}>
-                      <span style={{ background:ESTADOS[o.estado]?.bg||"#1A1F1A",color:estadoColor,
+                      <span style={{ background:ESTADOS[o.estado]?.bg||"#212125",color:estadoColor,
                         padding:"3px 8px",borderRadius:10,fontSize:11,fontWeight:600 }}>
                         {estadoLabel}
                       </span>

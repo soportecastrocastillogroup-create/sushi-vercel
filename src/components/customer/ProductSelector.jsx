@@ -54,9 +54,9 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
         {cats.map(c=>(
           <button key={c} onClick={()=>setCat(c)}
             style={{ padding:"7px 18px",borderRadius:20,border:"1px solid",fontSize:13,cursor:"pointer",
-              borderColor:activeCat===c?"#C9A84C":"#1E2820",
-              background:activeCat===c?"#C9A84C18":"transparent",
-              color:activeCat===c?"#C9A84C":"#607060",fontWeight:activeCat===c?700:400 }}>
+              borderColor:activeCat===c?"#E53935":"#2C2C31",
+              background:activeCat===c?"#E5393518":"transparent",
+              color:activeCat===c?"#E53935":"#9A9AA2",fontWeight:activeCat===c?700:400 }}>
             {c}
           </button>
         ))}
@@ -68,14 +68,14 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
           const available=isAvailable(product);
           return (
             <div key={product.id}
-              style={{ background: available?(qty>0?"#0F1A0F":"#0A0D0A"):"#0D0808",
+              style={{ background: available?(qty>0?"#18181C":"#0E0E10"):"#0D0808",
                 borderRadius:14,padding:"14px 16px",
-                border:`1px solid ${!available?"#3A1A1A":qty>0?"#C9A84C50":"#1A211B"}`,
+                border:`1px solid ${!available?"#3A1A1A":qty>0?"#E5393550":"#222226"}`,
                 transition:"all 0.2s",opacity:available?1:0.65 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10 }}>
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:2,flexWrap:"wrap" }}>
-                    <span style={{ color:!available?"#805050":qty>0?"#F0EBE0":"#C8D4C8",
+                    <span style={{ color:!available?"#805050":qty>0?"#F5F5F5":"#EEEEF2",
                       fontSize:15,fontWeight:700,letterSpacing:0.2 }}>
                       {product.nombre}
                     </span>
@@ -96,15 +96,15 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
                     <div style={{ marginBottom:6 }}>
                       {product.rolls.map((r,i)=>(
                         <div key={i} style={{ fontSize:11,marginBottom:2,display:"flex",gap:4,alignItems:"flex-start" }}>
-                          <span style={{ color:"#5A8A6A",fontWeight:600,whiteSpace:"nowrap" }}>Roll de {r.envoltura}</span>
-                          <span style={{ color:"#3A5040" }}>·</span>
-                          <span style={{ color:"#354535",flex:1,lineHeight:1.3 }}>{r.relleno}</span>
+                          <span style={{ color:"#8A8A8E",fontWeight:600,whiteSpace:"nowrap" }}>Roll de {r.envoltura}</span>
+                          <span style={{ color:"#535357" }}>·</span>
+                          <span style={{ color:"#47474B",flex:1,lineHeight:1.3 }}>{r.relleno}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {product.desc&&!product.rolls&&(
-                    <div style={{ fontSize:12,color:"#4A6050",lineHeight:1.4,marginBottom:4 }}>{product.desc}</div>
+                    <div style={{ fontSize:12,color:"#656569",lineHeight:1.4,marginBottom:4 }}>{product.desc}</div>
                   )}
                   {/* Precio — rojo y negrita */}
                   <div style={{ color:available?"#E03030":"#804040",fontWeight:800,fontSize:16,marginTop:3 }}>
@@ -116,34 +116,34 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
                   style={{ padding:"9px 18px",borderRadius:10,border:"none",
                     cursor:available?"pointer":"not-allowed",
                     fontSize:13,fontWeight:700,marginTop:2,flexShrink:0,
-                    background:!available?"#1A0D0D":qty>0?"#C9A84C":"#1A2F1A",
-                    color:!available?"#604040":qty>0?"#0A0D0A":"#5A9A5A" }}>
+                    background:!available?"#1A0D0D":qty>0?"#E53935":"#26262B",
+                    color:!available?"#604040":qty>0?"#FFFFFF":"#939397" }}>
                   {available?"+ Agregar":"Sin stock"}
                 </button>
               </div>
               {cart.filter(i=>i.productId===product.id).map(entry=>(
                 <div key={entry.cartId}
-                  style={{ marginTop:8,padding:"7px 12px",background:"#0A0F0A",
-                    borderRadius:8,borderLeft:"2px solid #C9A84C60" }}>
+                  style={{ marginTop:8,padding:"7px 12px",background:"#0F0F13",
+                    borderRadius:8,borderLeft:"2px solid #E5393560" }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                     <div style={{ flex:1 }}>
                       {entry.cambios.length===0 && !entry.opcionesStr
-                        ? <span style={{ color:"#354035",fontSize:12 }}>Sin cambios</span>
+                        ? <span style={{ color:"#5A5A62",fontSize:12 }}>Sin cambios</span>
                         : entry.cambios.map((c,i)=>(
                             <span key={i} style={{ display:"inline-block",marginRight:4,marginBottom:2,
-                              background:"#1A2818",color:"#6A9A6A",fontSize:11,
+                              background:"#27272B",color:"#9A9A9E",fontSize:11,
                               padding:"2px 8px",borderRadius:6 }}>
                               {c.nombre} +{fmt(c.precio)}
                             </span>
                           ))
                       }
                       {entry.opcionesStr&&(
-                        <div style={{ fontSize:11,color:"#C9A84C",marginTop:3,fontWeight:600 }}>
+                        <div style={{ fontSize:11,color:"#E53935",marginTop:3,fontWeight:600 }}>
                           🎯 {entry.opcionesStr}
                         </div>
                       )}
                       {entry.obsModal&&(
-                        <div style={{ fontSize:11,color:"#4A6A4A",marginTop:3,fontStyle:"italic" }}>
+                        <div style={{ fontSize:11,color:"#6B6B6F",marginTop:3,fontStyle:"italic" }}>
                           📝 {entry.obsModal}
                         </div>
                       )}
@@ -153,7 +153,7 @@ export default function ProductSelector({ cart, onAdd, onRemove, sucursal, stock
                         {fmt(itemTotal(entry))}
                       </span>
                       <button onClick={()=>onRemove(entry.cartId)}
-                        style={{ background:"transparent",border:"none",color:"#405040",
+                        style={{ background:"transparent",border:"none",color:"#6A6A72",
                           cursor:"pointer",fontSize:18,lineHeight:1 }}>×</button>
                     </div>
                   </div>

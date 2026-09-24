@@ -69,16 +69,19 @@ sushi-vercel/
 
 ## ¿Qué archivo edito?
 
+Desde la Etapa D del PRD 01 (`agents/PRD/01-landing-page-y-login.md`), **la base de datos es la fuente de verdad** de la carta y del sitio. El contenido se edita desde el panel, no desde el código.
+
 | Quiero cambiar… | Dónde |
 |---|---|
-| Menú, precios, promos, opciones de personalización | `supabase/schema.sql` (seed) → re-ejecutar en Supabase |
-| PINs, WhatsApp, horarios, límites | Tabla `app_settings` en Supabase |
+| Productos, precios, fotos, descripciones, promos y extras | Panel → **Carta** (rol administrador) |
+| Portada (slides), locales, horario, WhatsApp, delivery, cupos y días cerrados | Panel → **Sitio** (rol administrador) |
+| Cuentas del equipo y roles | Panel → **Usuarios** (rol administrador) |
 | Lógica de pedidos / estados | `src/services/orders.js`, `src/constants/estados.js` |
-| UI del flujo cliente | `src/components/customer/` |
-| UI admin / cocina / reportes | `src/components/admin/`, `kitchen/`, `reportes/` |
-| Variables de entorno | `.env` (local) / Vercel dashboard (prod) |
+| UI pública (landing, carta, locales) | `src/pages/`, `src/components/site/`, `src/styles/site.css` |
+| UI del panel | `src/panel/`, `src/components/{admin,kitchen,reportes,customer}/`, `src/styles/panel.css` |
+| Esquema de base de datos | Nueva migración en `supabase/migrations/` (nunca editar las ya aplicadas) |
 
----
+> ⚠️ **No volver a ejecutar `supabase/schema.sql` ni el seed de `scripts/generate-schema.mjs` en una base en uso**: sobrescribe lo que el cliente editó desde el panel.
 
 ## Persistencia (Supabase)
 
