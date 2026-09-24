@@ -45,8 +45,12 @@ versión:
 |---|---|
 | `main` | Producción. Incluye el PR #1 (`fix/order-number-conflict`, commits `3825e44` y `9af8116`, merge `2e47894`). **No commitear directo.** |
 | `fix/order-number-conflict` | Ya fusionada en `main`. |
-| `feature/frontend-propuesta-fase-1` | **Rama de trabajo actual.** Se creó desde `main` en `2e47894`. Contiene las Etapas A, B y D del PRD 01. **Al 24 sep 2026 no tiene commits propios: todo está sin commitear.** |
+| `feature/frontend-propuesta-fase-1` | **Rama de trabajo actual.** Se creó desde `main` en `2e47894`. Contiene las Etapas A, B y D del PRD 01, en el commit `b1ff0c1`, publicado en GitHub el 24 sep 2026. |
 
+- **Vercel no despliega esta rama:** `vercel.json` tiene
+  `git.deploymentEnabled["feature/frontend-propuesta-fase-1"] = false`, para que
+  el push no genere un Preview conectado a la base de producción. Quitar esa
+  entrada solo cuando las variables de Preview apunten a Pedidos Desarrollo.
 - Remoto: <https://github.com/soportecastrocastillogroup-create/sushi-vercel>. El
   repositorio es **público**, así que no se deben subir secretos. Las capturas
   de Niu en `agents/media/referencias/` quedarían visibles.
@@ -284,7 +288,8 @@ autorización y respaldo:
 3. Desplegar `manage-staff` en producción.
 4. Crear el primer administrador y las cuentas del personal.
 5. Aplicar la Etapa C.
-6. Cambiar las variables de Preview en Vercel y abrir el PR.
+6. Cambiar las variables de Preview en Vercel a Pedidos Desarrollo, quitar el
+   bloqueo de `git.deploymentEnabled` en `vercel.json` y abrir el PR.
 7. Merge a `main` y verificar el despliegue `Ready`.
 
 Al publicar el frontend dejan de existir los PIN, así que el personal necesita
