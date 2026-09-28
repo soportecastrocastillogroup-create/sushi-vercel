@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase.js";
 export async function fetchSettings() {
   const { data, error } = await supabase
     .from("app_settings")
-    .select("*")
+    .select("costo_delivery, whatsapp_num, max_cambios, max_por_horario, alerta_pedidos")
     .eq("id", 1)
     .single();
   if (error) throw error;
@@ -23,9 +23,6 @@ export async function fetchSettings() {
     costoDelivery: data.costo_delivery,
     whatsappNum: data.whatsapp_num,
     maxCambios: data.max_cambios,
-    adminPin: data.admin_pin,
-    kitchenPin: data.kitchen_pin,
-    reportesPin: data.reportes_pin,
     maxPorHorario: data.max_por_horario,
     alertaPedidos: data.alerta_pedidos,
     timeSlots: slots.map((s) => s.slot),

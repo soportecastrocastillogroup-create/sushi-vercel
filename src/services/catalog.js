@@ -15,8 +15,8 @@ export async function fetchMenu() {
     .from("products")
     .select(
       `
-      id, nombre, precio, piezas, desc_text, envoltura_actual, sort_order,
-      categories ( name ),
+      id, nombre, precio, piezas, desc_text, envoltura_actual, sort_order, image_url,
+      categories ( name, active, sort_order ),
       product_branches ( branches ( name ) ),
       promo_rolls ( sort_order, envoltura, relleno ),
       promo_options ( label, roll_idx, choices )
@@ -26,7 +26,13 @@ export async function fetchMenu() {
     .order("sort_order");
   if (pErr) throw pErr;
 
-  return products.map((p) => {
+  // Productos de categorías ocultas no se muestran; el orden sigue al de la
+  // categoría y luego al del producto.
+  const visible = products
+    .filter((p) => p.categories?.active !== false)
+    .sort((a, b) => (a.categories?.sort_order ?? 0) - (b.categories?.sort_order ?? 0) || a.sort_order - b.sort_order);
+
+  return visible.map((p) => {
     const item = {
       id: p.id,
       cat: p.categories?.name || "",
@@ -38,6 +44,7 @@ export async function fetchMenu() {
         .filter(Boolean),
     };
     if (p.desc_text) item.desc = p.desc_text;
+    if (p.image_url) item.imageUrl = p.image_url;
     if (p.envoltura_actual) item.envolturaActual = p.envoltura_actual;
     if (p.promo_rolls?.length) {
       item.rolls = [...p.promo_rolls]

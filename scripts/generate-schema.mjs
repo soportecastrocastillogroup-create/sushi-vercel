@@ -402,5 +402,6 @@ GRANT EXECUTE ON FUNCTION get_next_order_number() TO anon;
 `;
 
 const out = ddl + seed + rls;
-writeFileSync(join(root, "supabase", "schema.sql"), out);
-console.log("Wrote supabase/schema.sql (" + out.split("\n").length + " lines)");
+const outputPath = process.argv[2] ?? "supabase/schema.sql";
+writeFileSync(join(root, outputPath), out);
+console.log(`Wrote ${outputPath} (${out.split("\n").length} lines)`);
