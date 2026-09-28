@@ -51,12 +51,8 @@ function UserMenu({ profile, onSignOut }) {
 function PanelShell() {
   usePageTitle("Panel · Sushi Loncoche");
   const auth = useAuth();
-  const { pathname } = useLocation();
   const data = useOrderingData();
   const pending = data.orders.filter((o) => o.estado === "abierto").length;
-  const mustChange = auth.profile.must_change_password;
-
-  if (mustChange && pathname !== "/panel/cuenta") return <Navigate to="/panel/cuenta" replace />;
 
   const nav = [
     { to: "/panel/pedidos", label: "Pedidos", badge: pending },
@@ -80,16 +76,14 @@ function PanelShell() {
             <BrandLogo size="sm" />
             <span className="panel-bar__tag">Equipo</span>
           </Link>
-          {!mustChange && (
-            <nav className="panel-nav" aria-label="Secciones">
-              {nav.map((n) => (
-                <NavLink key={n.to} to={n.to} className="panel-nav__link">
-                  {n.label}
-                  {n.badge > 0 && <span className="panel-nav__badge">{n.badge}</span>}
-                </NavLink>
-              ))}
-            </nav>
-          )}
+          <nav className="panel-nav" aria-label="Secciones">
+            {nav.map((n) => (
+              <NavLink key={n.to} to={n.to} className="panel-nav__link">
+                {n.label}
+                {n.badge > 0 && <span className="panel-nav__badge">{n.badge}</span>}
+              </NavLink>
+            ))}
+          </nav>
           <UserMenu profile={auth.profile} onSignOut={auth.signOut} />
         </div>
       </header>

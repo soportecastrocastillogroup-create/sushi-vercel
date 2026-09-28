@@ -5,7 +5,7 @@ repositorio. **Léelo completo antes de cambiar código, base de datos o
 despliegues.** Actualízalo cuando cambie una decisión, una ruta, una tabla o el
 estado de una etapa.
 
-- Última actualización: 24 de septiembre de 2026.
+- Última actualización: 28 de septiembre de 2026.
 - Documento de producto vigente: [`agents/PRD/01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md).
   Tiene el detalle de cada etapa, los criterios de aceptación y la bitácora.
 - Contexto del cliente y del incidente original: `../AGENTS.md`, en la raíz del
@@ -30,7 +30,13 @@ versión:
 1. **Landing pública** al estilo de la de Niu Sushi (<https://www.niusushi.cl/>),
    con la identidad de Sushi Loncoche.
 2. **Carta pública** en grilla, con carrito, que **envía el pedido por
-   WhatsApp**. El público ya no crea pedidos en la base.
+   WhatsApp**. El público no crea pedidos en la base.
+
+**[Informado por Bruno Veinz, 28 sep 2026]** El formulario de pedido heredado
+**nunca lo usó el cliente final**: siempre lo usó solo el equipo de trabajo para
+registrar pedidos. Por eso mover ese formulario al panel ("Nuevo pedido") no
+cambia la operación, y la carta pública con WhatsApp es un canal nuevo, no un
+reemplazo de uno que usara el público.
 3. **Panel interno detrás de un login real** (Supabase Auth), con los roles
    `administrador` y `colaborador`. Los PIN desaparecen.
 4. **Sitio autoadministrable:** el administrador edita la carta, las fotos, los
@@ -140,7 +146,7 @@ src/
 | `/carta` | Público | `MenuPage`: grilla por sucursal y categoría, buscador, `ProductModal` y `CartDrawer`, que envía el pedido por WhatsApp |
 | `/locales` | Público | `LocalesPage` (datos desde `branches`) |
 | `/login` | Público | `LoginPage` |
-| `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/pedidos` |
+| `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/nuevo-pedido` |
 | `/panel/pedidos` | Ambos roles | `AdminView` heredado |
 | `/panel/nuevo-pedido` | Ambos roles | `CustomerView` heredado |
 | `/panel/cocina` | Ambos roles | `KitchenView` heredado |
@@ -148,7 +154,7 @@ src/
 | `/panel/sitio` | `administrador` | `SitioAdminPage` (portada, locales, datos del negocio) |
 | `/panel/reportes` | `administrador` | `ReportesView` heredado |
 | `/panel/usuarios` | `administrador` | `UsersPage` |
-| `/panel/cuenta` | Ambos roles | `AccountPage`; se fuerza si `must_change_password` |
+| `/panel/cuenta` | Ambos roles | `AccountPage`: cambio de contraseña opcional |
 
 ### Flujo de datos
 
@@ -231,8 +237,12 @@ Desarrollo**:
   - Bloquea desactivarse a sí mismo y dejar el sistema sin administradores.
   - Desactivar una cuenta la banea en Auth y pone `active = false`, lo que corta
     el acceso de inmediato porque `is_staff()` revisa `active`.
-- **No hay invitaciones por correo.** El administrador define una contraseña
-  temporal, que se muestra una sola vez, y la persona la cambia al entrar.
+- **No hay invitaciones por correo.** El administrador define la contraseña,
+  que se muestra una sola vez, y la persona entra directo con ella. **No hay
+  cambio obligatorio** (decisión de Bruno Veinz, 28 sep 2026: para una pyme chica
+  era un paso de más). Cada persona puede cambiarla cuando quiera en
+  `/panel/cuenta`. La columna `staff_profiles.must_change_password` sigue en la
+  base, pero el frontend ya no la usa y `manage-staff` la deja en `false`.
 - El primer administrador se creó a mano: el usuario creó su cuenta en el
   dashboard de Auth y se insertó su `staff_profiles` por SQL (registrado en
   `staff_audit` como `bootstrap_admin`). Los siguientes se crean desde
@@ -305,8 +315,6 @@ sus cuentas **antes** del despliegue.
 - Del cliente: logo original y color oficial, fotos de productos y del local,
   dirección de Loncoche, horarios y días reales, textos del hero, y la lista del
   personal con su correo y rol.
-- Confirmar con el cliente que el público pedirá por WhatsApp y ya no creará
-  pedidos directo en el sistema.
 - Hay dos formas de cargar pedidos a mano: "+ Pedido manual" dentro de Pedidos
   y "Nuevo pedido". Conviene preguntar cuál usan y dejar solo una.
 - Las imágenes subidas y descartadas sin guardar quedan huérfanas en Storage

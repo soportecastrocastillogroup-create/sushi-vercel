@@ -32,7 +32,7 @@ export async function changeOwnPassword(password) {
   if (rErr) throw new Error("La contraseña cambió, pero no pudimos actualizar tu perfil.");
 }
 
-// Contraseña temporal legible (sin caracteres ambiguos).
+// Contraseña legible (sin caracteres ambiguos).
 export function generatePassword(length = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   const bytes = crypto.getRandomValues(new Uint32Array(length));

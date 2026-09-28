@@ -24,14 +24,14 @@ const fmtDate = (iso) =>
 function PasswordField({ value, onChange }) {
   return (
     <label className="field">
-      <span>Contraseña temporal</span>
+      <span>Contraseña</span>
       <div className="login__pass">
         <input value={value} onChange={(e) => onChange(e.target.value)} autoComplete="off" spellCheck="false" />
         <button type="button" onClick={() => onChange(generatePassword())}>
           Generar
         </button>
       </div>
-      <small className="panel-muted">La persona deberá cambiarla al entrar por primera vez.</small>
+      <small className="panel-muted">La persona entra con esta contraseña. Mínimo 8 caracteres.</small>
     </label>
   );
 }
@@ -58,10 +58,10 @@ function RolePicker({ value, onChange }) {
   );
 }
 
-// Muestra la contraseña temporal una sola vez para entregarla a la persona.
+// Muestra la contraseña una sola vez para entregarla a la persona.
 function Credentials({ email, password, onClose }) {
   const [copied, setCopied] = useState(false);
-  const text = `Acceso al panel de Sushi Loncoche\nCorreo: ${email}\nContraseña temporal: ${password}`;
+  const text = `Acceso al panel de Sushi Loncoche\nCorreo: ${email}\nContraseña: ${password}`;
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);

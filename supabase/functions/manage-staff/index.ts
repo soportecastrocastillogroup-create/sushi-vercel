@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
         const userId = created.user.id;
         const { error: pErr } = await admin
           .from("staff_profiles")
-          .insert({ user_id: userId, nombre, email, rol, must_change_password: true });
+          .insert({ user_id: userId, nombre, email, rol, must_change_password: false });
         if (pErr) {
           await admin.auth.admin.deleteUser(userId); // no dejar usuarios sin perfil
           throw pErr;
@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
         if (pErr) throw pErr;
         const { error } = await admin
           .from("staff_profiles")
-          .update({ must_change_password: userId !== actorId, updated_at: new Date().toISOString() })
+          .update({ must_change_password: false, updated_at: new Date().toISOString() })
           .eq("user_id", userId);
         if (error) throw error;
         await audit(admin, actorId, userId, "reset_password");

@@ -41,7 +41,7 @@ export default function App() {
             </Route>
             <Route path="login" element={<LoginPage />} />
             <Route path="panel" element={<PanelLayout />}>
-              <Route index element={<Navigate to="pedidos" replace />} />
+              <Route index element={<Navigate to="nuevo-pedido" replace />} />
               <Route path="pedidos" element={<OrdersSection />} />
               <Route path="nuevo-pedido" element={<NewOrderSection />} />
               <Route path="cocina" element={<KitchenSection />} />
