@@ -1771,3 +1771,6 @@
     font-size: 40px;
   }
 }
+.login__alert .login__title {
+  color: var(--text);
+}
