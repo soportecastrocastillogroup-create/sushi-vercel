@@ -31,6 +31,7 @@ export const ESTADOS = {
 
 export const FUENTES = [
   { id: "web", label: "🌐 Web" },
+  { id: "cuenta_web", label: "🧑 Cuenta web" },
   { id: "whatsapp", label: "💬 WhatsApp" },
   { id: "instagram", label: "📷 Instagram" },
   { id: "presencial", label: "🏪 Presencial" },

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router";
+import { Link, useOutletContext } from "react-router";
+import { useAuth } from "../context/auth-context.js";
+import { waLink } from "../utils/whatsapp.js";
 import { useCart } from "../context/cart-context.js";
 import ProductArt from "../components/site/ProductArt.jsx";
 import ProductModal from "../components/site/ProductModal.jsx";
-import { BagIcon } from "../components/site/Icons.jsx";
+import { BagIcon, WhatsAppIcon } from "../components/site/Icons.jsx";
 import { fmt } from "../utils/format.js";
 import { usePageTitle } from "../hooks/usePageTitle.js";
 
@@ -15,7 +17,8 @@ const normalize = (s) =>
 
 export default function MenuPage() {
   usePageTitle("Carta · Sushi Loncoche");
-  const { publicMenu, branch, changeBranch } = useOutletContext();
+  const { publicMenu, branch, changeBranch, whatsappNum } = useOutletContext();
+  const { customer } = useAuth();
   const { menu, branches, stock, loading, error, reload } = publicMenu;
   const cart = useCart();
   const [query, setQuery] = useState("");
@@ -33,10 +36,18 @@ export default function MenuPage() {
 
   const available = (p) => stock[p.id] !== false;
 
+  // Sin cuenta no hay carrito: el producto se pide directo por WhatsApp (PRD 02 · 5.5).
+  const pedirPorWhatsApp = (p, { qty = 1, opciones = [] } = {}) => {
+    const detalle = opciones.length ? ` (${opciones.join(", ")})` : "";
+    const texto = `¡Hola Sushi Loncoche! Quiero pedir ${qty}× ${p.nombre}${detalle} en ${branch}.`;
+    window.open(waLink(whatsappNum, texto), "_blank", "noopener");
+  };
+  const agregar = customer ? cart.add : pedirPorWhatsApp;
+
   const quickAdd = (p) => {
     if (!available(p)) return;
     if (p.opciones?.length || p.rolls?.length) return setSelected(p);
-    cart.add(p);
+    agregar(p);
   };
 
   if (loading) {
@@ -99,6 +110,22 @@ export default function MenuPage() {
       </aside>
 
       <section className="menu__grid" aria-label={q ? "Resultados de búsqueda" : activeCat}>
+        {!customer && (
+          <div className="menu__account">
+            <p>
+              <strong>Crea tu cuenta para armar tu pedido aquí</strong>, elegir día y horario, y seguirlo desde Mi cuenta. Sin
+              cuenta, pide cada producto directo por WhatsApp.
+            </p>
+            <div>
+              <Link to="/registro" className="btn btn--primary btn--sm">
+                Crear cuenta
+              </Link>
+              <Link to="/ingresar" state={{ from: "/carta" }} className="btn btn--ghost btn--sm">
+                Ingresar
+              </Link>
+            </div>
+          </div>
+        )}
         {products.length === 0 && <p className="menu__empty">No encontramos productos{q ? ` para “${query}”` : ""}.</p>}
         {products.map((p) => {
           const ok = available(p);
@@ -119,20 +146,33 @@ export default function MenuPage() {
                 type="button"
                 className="product-card__add"
                 disabled={!ok}
-                aria-label={ok ? `Agregar ${p.nombre}` : `${p.nombre} agotado`}
+                aria-label={ok ? (customer ? `Agregar ${p.nombre}` : `Pedir ${p.nombre} por WhatsApp`) : `${p.nombre} agotado`}
                 onClick={() => quickAdd(p)}
               >
-                <BagIcon />
-                <span aria-hidden="true">+</span>
+                {customer ? (
+                  <>
+                    <BagIcon />
+                    <span aria-hidden="true">+</span>
+                  </>
+                ) : (
+                  <WhatsAppIcon />
+                )}
               </button>
             </article>
           );
         })}
       </section>
 
-      {selected && <ProductModal product={selected} onClose={() => setSelected(null)} onAdd={cart.add} />}
+      {selected && (
+        <ProductModal
+          product={selected}
+          onClose={() => setSelected(null)}
+          onAdd={agregar}
+          actionLabel={customer ? "Agregar" : "Pedir por WhatsApp"}
+        />
+      )}
 
-      {cart.count > 0 && (
+      {customer && cart.count > 0 && (
         <button type="button" className="cart-fab" onClick={() => cart.setOpen(true)}>
           <span>
             Ver pedido <strong>({cart.count})</strong>

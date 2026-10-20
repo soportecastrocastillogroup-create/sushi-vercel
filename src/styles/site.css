@@ -1537,3 +1537,237 @@
     width: min(280px, 72vw);
   }
 }
+
+/* ── Cuentas de clientes (PRD 02 · Etapa 5) ───────────────────────────── */
+.field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+}
+.check-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.check-line input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+  accent-color: var(--brand-red);
+}
+.login__help a,
+.account a.text-link {
+  color: var(--text);
+  text-decoration: underline;
+}
+.signup-email {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: rgba(229, 57, 53, 0.08);
+  color: var(--text) !important;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  word-break: break-all;
+}
+.account {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+  display: grid;
+  gap: 16px;
+}
+.account__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account__head .page-head__title {
+  font-size: 48px;
+}
+.account__card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.account__card h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.account__card .btn {
+  justify-self: start;
+}
+.account__muted {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.account__ok {
+  margin: 0 0 14px;
+  color: #81c784;
+  font-size: 14px;
+}
+.account-orders {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-order {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #f59e0b;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.account-order--en_proceso {
+  border-left-color: #60a5fa;
+}
+.account-order--listo {
+  border-left-color: #34d399;
+}
+.account-order--completado {
+  border-left-color: #6b7280;
+}
+.account-order__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.account-order__estado {
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-order p {
+  margin: 4px 0 0;
+}
+.account-order__items {
+  font-size: 14px;
+}
+.account-order__total {
+  color: var(--accent);
+  font-weight: 700;
+}
+.account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.account-link:hover {
+  border-color: var(--accent);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chips button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.chips button.is-active {
+  border-color: var(--brand-red);
+  background: rgba(191, 32, 32, 0.14);
+  font-weight: 600;
+}
+.chips button:disabled {
+  color: #5a5a62;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.chips--slots button {
+  min-width: 64px;
+}
+.seg--stack {
+  flex-direction: column;
+}
+.cart__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.cart__error {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(229, 57, 53, 0.12);
+  color: #ffab91;
+  font-size: 14px;
+}
+.cart__error p {
+  margin: 0;
+}
+.menu__account {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+}
+.menu__account p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.menu__account strong {
+  color: var(--text);
+}
+.menu__account div {
+  display: flex;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .account-link {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .account-link span {
+    display: none;
+  }
+  .account__head .page-head__title {
+    font-size: 40px;
+  }
+}

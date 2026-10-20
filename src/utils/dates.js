@@ -70,7 +70,8 @@ export const pedidosEnHora = (fecha, orders, horario, sucursal) =>
 // Bloques de una hora a partir de las franjas: ["17:00", "17:15", "18:00"] → ["17", "18"].
 export const bloquesDe = (timeSlots) => [...new Set(timeSlots.map(horaDe))].sort();
 
-const franjaCercana = (fecha, h, ahora) => {
+// Hoy no se ofrecen franjas a menos de 30 minutos.
+export const franjaCercana = (fecha, h, ahora = new Date()) => {
   if (fecha !== isoLocal(ahora)) return false;
   const [hh, mm] = h.split(":").map(Number);
   const limite = new Date(ahora);

@@ -16,6 +16,9 @@ const AccountPage = lazy(() => import("./panel/AccountPage.jsx"));
 const CartaAdminPage = lazy(() => import("./panel/CartaAdminPage.jsx"));
 const SitioAdminPage = lazy(() => import("./panel/SitioAdminPage.jsx"));
 const InventarioPage = lazy(() => import("./panel/InventarioPage.jsx"));
+const IngresarPage = lazy(() => import("./pages/IngresarPage.jsx"));
+const RegistroPage = lazy(() => import("./pages/RegistroPage.jsx"));
+const MiCuentaPage = lazy(() => import("./pages/MiCuentaPage.jsx"));
 const CajaPage = lazy(() => import("./panel/CajaPage.jsx"));
 const sections = () => import("./panel/sections.jsx");
 const OrdersSection = lazy(() => sections().then((m) => ({ default: m.OrdersSection })));
@@ -39,9 +42,12 @@ export default function App() {
               <Route index element={<LandingPage />} />
               <Route path="carta" element={<MenuPage />} />
               <Route path="locales" element={<LocalesPage />} />
+              <Route path="mi-cuenta" element={<MiCuentaPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
             <Route path="login" element={<LoginPage />} />
+            <Route path="ingresar" element={<IngresarPage />} />
+            <Route path="registro" element={<RegistroPage />} />
             <Route path="panel" element={<PanelLayout />}>
               <Route index element={<Navigate to="nuevo-pedido" replace />} />
               <Route path="pedidos" element={<OrdersSection />} />

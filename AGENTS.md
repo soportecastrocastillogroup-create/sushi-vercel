@@ -86,8 +86,8 @@ Pruebas automatizadas (`node:test`, sin dependencias nuevas):
 - `npm test`: unitarias de `tests/unit/` (cupos y fechas de `utils/dates.js`,
   fórmula de `utils/caja.js`).
 - `npm run test:db`: integración de `tests/db/` contra **Pedidos Desarrollo**
-  (RLS de pedidos, `create_order`, cupos, pedidos simultáneos, inventario y
-  caja).
+  (RLS de pedidos, `create_order`, cupos, pedidos simultáneos, inventario,
+  caja y cuentas de clientes).
   La conexión está en `tests/db/helpers.js`. Necesita
   `.env.local` y `credenciales-prueba.local`, se niega a correr contra otro
   proyecto, usa una fecha de 2031 y borra lo que crea (consume números de
@@ -158,7 +158,10 @@ src/
 | `/` | Público | `LandingPage` → `HeroCarousel` (slides desde `site_slides`) |
 | `/carta` | Público | `MenuPage`: grilla por sucursal y categoría, buscador, `ProductModal` y `CartDrawer`, que envía el pedido por WhatsApp |
 | `/locales` | Público | `LocalesPage` (datos desde `branches`) |
-| `/login` | Público | `LoginPage` |
+| `/login` | Público | `LoginPage` (acceso del equipo) |
+| `/ingresar` | Público | `IngresarPage`: ingreso de clientes; "olvidé mi contraseña" abre WhatsApp |
+| `/registro` | Público | `RegistroPage`: crea la cuenta de cliente (sin confirmar correo) y muestra el correo en grande |
+| `/mi-cuenta` | Cliente | `MiCuentaPage`: pedidos y estado, datos, consentimiento y contraseña |
 | `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/nuevo-pedido` |
 | `/panel/pedidos` | Ambos roles | `AdminView` heredado con `OrdersKanban`: un día y una sucursal, una columna por bloque de una hora con su ocupación; cambiar estado, abrir detalle (`OrderCard`) y mover de bloque (arrastrar o "⏰") |
 | `/panel/nuevo-pedido` | Ambos roles | `CustomerView` heredado |
@@ -182,9 +185,12 @@ src/
   lo pasa a las secciones por el `Outlet` context. Carta y Sitio cargan sus
   propios datos de edición (`services/cms.js`) y llaman a `refreshAll()` al
   guardar.
-- **Pedido público:** el carrito arma el mensaje con `utils/whatsappOrder.js` y
-  abre `wa.me/<app_settings.whatsapp_num>`. El equipo lo registra después en
-  "Nuevo pedido" o en "+ Pedido manual".
+- **Pedido público [PRD 02 · Etapa 5]:** sin cuenta no hay carrito: cada
+  producto se pide por WhatsApp y la carta invita a crear cuenta. Con cuenta
+  (`useAuth().customer`), el `CartDrawer` elige día, horario con cupo
+  (`available_slots`), datos y pago, guarda el pedido con `create_order`
+  (origen `cuenta_web`) y ofrece enviar el resumen con el número por WhatsApp
+  (`buildAccountOrderMessage`).
 
 ### Convenciones de código
 
@@ -220,6 +226,7 @@ Desarrollo**:
 | `20261019200000_slots_until_22.sql` | Franjas base de 17:00 a 22:00 cada 15 min: solo agrega las que falten y reordena; no borra las configuradas |
 | `20261020000000_inventory.sql` | PRD 02 · Etapa 3: `inventory_items`, `inventory_item_branches` (mínimo por sucursal) e `inventory_movements` (con signo por tipo; autoría por trigger); `inventory_semaforo()`, vista `inventory_stock` (`security_invoker`) y `inventory_daily(branch, fecha)`. RLS: personal lee todo y escribe movimientos; administrador configura insumos |
 | `20261020010000_cash_closings.sql` | PRD 02 · Etapa 4: `branches.pago_repartidor` (2000, editable en Locales); `cash_closings` (uno por sucursal y día, con las cifras del momento; sin INSERT/UPDATE directos, borra solo el administrador); `cash_summary(branch, fecha)` y `save_cash_closing(branch, fecha, declarado)` (`security definer`, exigen `is_staff()`). La tarifa del repartidor queda fija desde el primer cierre |
+| `20261020020000_customer_accounts.sql` | PRD 02 · Etapa 5: `customers` (ficha por correo; la crea el trigger `on_auth_user_created_customer` cuando el registro trae `tipo = 'cliente'` y se enlaza a una ficha previa), `orders.customer_id` y `cliente_email`, `my_customer_id()`, `update_my_customer()`, `available_slots()`; RLS (cliente: su ficha y sus pedidos; administrador: todas las fichas; colaborador y anon: ninguna); lectura de `product_stock` y `unlocked_dates` para `authenticated`; `create_order` acepta clientes con reglas estrictas (errores `SL409`, `SL422`, `SL429`) |
 
 ### Datos clave
 
@@ -264,6 +271,10 @@ Desarrollo**:
 | `authenticated` activo con rol | `is_staff()`: operación diaria (stock y fechas; pedidos: leer, editar y borrar, y crear solo con `create_order()`) |
 | `administrador` | `is_admin()`: además escribe el catálogo, la configuración, el sitio y el Storage, y gestiona cuentas vía Edge Function |
 
+- Clientes: la Edge Function **`supabase/functions/manage-customers`**
+  (desplegada en desarrollo; solo administradores) tiene `reset_password`,
+  `set_blocked` y `update_email`. La pantalla para usarla llega con Susheros
+  (Etapa 6).
 - Cuentas: la Edge Function **`supabase/functions/manage-staff`** (desplegada en
   desarrollo) tiene las acciones `list`, `create`, `update`, `set_active` y
   `reset_password`.
@@ -395,8 +406,9 @@ npx supabase functions deploy manage-staff --project-ref ikzprpnpyvbwsxiqprdt --
 ```
 
 Cuentas de prueba (solo desarrollo): `scripts/seed-test-accounts.mjs` crea o
-restablece `agente.pruebas@example.com` (administrador) y
-`colab.pruebas@example.com` (colaborador) con contraseñas aleatorias, y las
+restablece `agente.pruebas@example.com` (administrador),
+`colab.pruebas@example.com` (colaborador), y `cliente.pruebas@example.com` y
+`cliente2.pruebas@example.com` (clientes) con contraseñas aleatorias, y las
 guarda en `credenciales-prueba.local` (ignorado por Git, no se imprime). Se
 niega a correr si la clave `service_role` no es de Pedidos Desarrollo. El
 comando está en la cabecera del script.

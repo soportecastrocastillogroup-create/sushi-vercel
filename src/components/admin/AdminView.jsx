@@ -300,7 +300,7 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
             <div style={{ marginBottom:16 }}>
               <label style={{ color:"#8A8A92",fontSize:11,letterSpacing:1,display:"block",marginBottom:8 }}>ORIGEN</label>
               <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
-                {FUENTES.map(f=>(
+                {FUENTES.filter(f=>f.id!=="cuenta_web").map(f=>(
                   <button key={f.id} onClick={()=>setMf(m=>({...m,fuente:f.id}))}
                     style={{ padding:"6px 10px",borderRadius:8,border:"1px solid",fontSize:12,cursor:"pointer",
                       borderColor:mf.fuente===f.id?"#E53935":"#2C2C31",

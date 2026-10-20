@@ -1,6 +1,7 @@
 /**
- * Crea o restablece las cuentas de prueba del personal en Pedidos Desarrollo,
- * con contraseñas aleatorias nuevas en cada ejecución.
+ * Crea o restablece las cuentas de prueba en Pedidos Desarrollo (personal y
+ * clientes), con contraseñas aleatorias nuevas en cada ejecución. Los
+ * clientes se crean con tipo = 'cliente', así el trigger les crea su ficha.
  *
  * Las contraseñas no se imprimen: se guardan en credenciales-prueba.local
  * (ignorado por Git). Ábrelo en tu editor para verlas.
@@ -22,7 +23,10 @@ const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ACCOUNTS = [
   { email: "agente.pruebas@example.com", nombre: "Agente Pruebas", rol: "administrador" },
   { email: "colab.pruebas@example.com", nombre: "Colaborador Pruebas", rol: "colaborador" },
+  { email: "cliente.pruebas@example.com", nombre: "Cliente Pruebas", rol: "cliente", telefono: "+56900000001" },
+  { email: "cliente2.pruebas@example.com", nombre: "Cliente Dos Pruebas", rol: "cliente2", telefono: "+56900000002" },
 ];
+const isCliente = (acc) => acc.rol.startsWith("cliente");
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outFile = join(root, "credenciales-prueba.local");
@@ -72,8 +76,23 @@ for (const acc of ACCOUNTS) {
   } else {
     user = await api("/auth/v1/admin/users", {
       method: "POST",
-      body: JSON.stringify({ email: acc.email, password, email_confirm: true }),
+      body: JSON.stringify({
+        email: acc.email,
+        password,
+        email_confirm: true,
+        user_metadata: isCliente(acc) ? { tipo: "cliente", nombre: acc.nombre, telefono: acc.telefono } : { nombre: acc.nombre },
+      }),
     });
+  }
+  if (isCliente(acc)) {
+    // Ficha de cliente desbloqueada (el trigger la crea al registrarse).
+    await api(`/rest/v1/customers?auth_user_id=eq.${user.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ bloqueado: false }),
+    });
+    lines.push(`${acc.rol}: ${acc.email} / ${password}`);
+    console.log(`OK ${acc.rol}: ${acc.email}`);
+    continue;
   }
   await api("/rest/v1/staff_profiles?on_conflict=user_id", {
     method: "POST",

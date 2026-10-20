@@ -37,3 +37,26 @@ export async function login(rol) {
   if (error) throw new Error(`No se pudo entrar como ${rol}: ${error.message}`);
   return c;
 }
+
+// Llama a una Edge Function con la sesión de `client`.
+export async function callFunction(client, name, body) {
+  const { data } = await client.auth.getSession();
+  const res = await fetch(`${env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      apikey: env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${data.session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+export const credentials = (rol) => creds[rol];
+
+// Fecha "YYYY-MM-DD" en Chile, desplazada `dias` desde hoy.
+export function isoChile(dias = 0) {
+  const d = new Date(Date.now() + dias * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(d);
+}
