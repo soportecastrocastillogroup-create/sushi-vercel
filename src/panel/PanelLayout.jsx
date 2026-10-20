@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth } from "../context/auth-context.js";
 import { useOrderingData } from "../hooks/useOrderingData.js";
+import { useInventoryAlerts } from "../hooks/useInventoryAlerts.js";
 import { usePageTitle } from "../hooks/usePageTitle.js";
 import { BrandLogo } from "../components/site/Brand.jsx";
 import { UserIcon } from "../components/site/Icons.jsx";
@@ -53,11 +54,13 @@ function PanelShell() {
   const auth = useAuth();
   const data = useOrderingData();
   const pending = data.orders.filter((o) => o.estado === "abierto").length;
+  const inventory = useInventoryAlerts();
 
   const nav = [
     { to: "/panel/pedidos", label: "Pedidos", badge: pending },
     { to: "/panel/nuevo-pedido", label: "Nuevo pedido" },
     { to: "/panel/cocina", label: "Cocina" },
+    { to: "/panel/inventario", label: "Inventario", badge: inventory.alerts.length, alert: true },
     ...(auth.isAdmin
       ? [
           { to: "/panel/carta", label: "Carta" },
@@ -80,7 +83,14 @@ function PanelShell() {
             {nav.map((n) => (
               <NavLink key={n.to} to={n.to} className="panel-nav__link">
                 {n.label}
-                {n.badge > 0 && <span className="panel-nav__badge">{n.badge}</span>}
+                {n.badge > 0 && (
+                  <span
+                    className={`panel-nav__badge${n.alert ? " panel-nav__badge--alert" : ""}`}
+                    title={n.alert ? "Insumos críticos bajo el mínimo" : undefined}
+                  >
+                    {n.badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -103,7 +113,7 @@ function PanelShell() {
             </button>
           </div>
         ) : (
-          <Outlet context={data} />
+          <Outlet context={{ ...data, inventoryAlerts: inventory.alerts, refreshInventoryAlerts: inventory.refresh }} />
         )}
       </main>
     </div>

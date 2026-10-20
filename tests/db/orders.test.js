@@ -1,50 +1,13 @@
 // Pruebas de integración contra Pedidos Desarrollo (PRD 02 · Etapas 1 y 2):
 // RLS de pedidos, create_order, cupo por hora y pedidos simultáneos.
 //
-// Requiere .env.local (Pedidos Desarrollo) y credenciales-prueba.local
-// (scripts/seed-test-accounts.mjs). Se niega a correr contra otro proyecto.
-// Crea pedidos en una fecha de 2031 y los borra al terminar; cada corrida
-// consume algunos números de pedido.
+// Conexión en tests/db/helpers.js. Crea pedidos en una fecha de 2031 y los
+// borra al terminar; cada corrida consume algunos números de pedido.
 //
 // Run: npm run test:db
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createClient } from "@supabase/supabase-js";
-
-const DEV_REF = "ikzprpnpyvbwsxiqprdt";
-const root = new URL("../../", import.meta.url);
-
-const env = Object.fromEntries(
-  readFileSync(new URL(".env.local", root), "utf8")
-    .split("\n")
-    .filter((l) => l.includes("=") && !l.startsWith("#"))
-    .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()])
-);
-if (!env.VITE_SUPABASE_URL?.includes(DEV_REF)) {
-  throw new Error(".env.local no apunta a Pedidos Desarrollo. No se corren las pruebas.");
-}
-
-const creds = Object.fromEntries(
-  readFileSync(new URL("credenciales-prueba.local", root), "utf8")
-    .split("\n")
-    .filter((l) => l.includes(" / "))
-    .map((l) => {
-      const [rol, rest] = l.split(": ");
-      const [email, password] = rest.split(" / ");
-      return [rol, { email, password }];
-    })
-);
-
-const client = () =>
-  createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-
-async function login(rol) {
-  const c = client();
-  const { error } = await c.auth.signInWithPassword(creds[rol]);
-  if (error) throw new Error(`No se pudo entrar como ${rol}: ${error.message}`);
-  return c;
-}
+import { anonClient as client, login } from "./helpers.js";
 
 // Una fecha de 2031 distinta en cada corrida, para no chocar con datos reales.
 const FECHA = (() => {

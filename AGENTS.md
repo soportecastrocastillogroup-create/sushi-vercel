@@ -85,7 +85,8 @@ reemplazo de uno que usara el público.
 Pruebas automatizadas (`node:test`, sin dependencias nuevas):
 - `npm test`: unitarias de `tests/unit/` (lógica de cupos de `utils/dates.js`).
 - `npm run test:db`: integración de `tests/db/` contra **Pedidos Desarrollo**
-  (RLS de pedidos, `create_order`, cupos y pedidos simultáneos). Necesita
+  (RLS de pedidos, `create_order`, cupos, pedidos simultáneos e inventario).
+  La conexión está en `tests/db/helpers.js`. Necesita
   `.env.local` y `credenciales-prueba.local`, se niega a correr contra otro
   proyecto, usa una fecha de 2031 y borra lo que crea (consume números de
   pedido).
@@ -164,6 +165,7 @@ src/
 | `/panel/sitio` | `administrador` | `SitioAdminPage` (portada, locales, datos del negocio) |
 | `/panel/reportes` | `administrador` | `ReportesView` heredado |
 | `/panel/usuarios` | `administrador` | `UsersPage` |
+| `/panel/inventario` | Ambos roles | `InventarioPage`: planilla del día por sucursal (ingreso, uso, merma y conteo), movimientos (filtros, editar y borrar) e Insumos (solo administrador). Badge rojo en el menú con los críticos bajo el mínimo (`useInventoryAlerts`) |
 | `/panel/cuenta` | Ambos roles | `AccountPage`: cambio de contraseña opcional |
 
 ### Flujo de datos
@@ -213,6 +215,7 @@ Desarrollo**:
 | `20261019180000_secure_orders.sql` | PRD 02 · Etapa 1: quita `anon_all_*` (en `product_stock` `anon` queda solo con lectura); el personal lee, edita y borra pedidos, pero los crea solo con `create_order()`; revoca `get_next_order_number()`; elimina las columnas de PIN |
 | `20261019190000_hourly_capacity.sql` | PRD 02 · Etapa 2: `branches.cupo_por_hora` (reemplaza a `app_settings.max_por_horario`, que se elimina); `hora_bloque()`; `create_order(p_order, p_items, p_forzar)` valida el cupo del bloque de una hora por sucursal (cuenta todos los estados) y rechaza con `SL409` y `detail` `{hora, pedidos, cupo}`; `p_forzar` deja pasarse del cupo |
 | `20261019200000_slots_until_22.sql` | Franjas base de 17:00 a 22:00 cada 15 min: solo agrega las que falten y reordena; no borra las configuradas |
+| `20261020000000_inventory.sql` | PRD 02 · Etapa 3: `inventory_items`, `inventory_item_branches` (mínimo por sucursal) e `inventory_movements` (con signo por tipo; autoría por trigger); `inventory_semaforo()`, vista `inventory_stock` (`security_invoker`) y `inventory_daily(branch, fecha)`. RLS: personal lee todo y escribe movimientos; administrador configura insumos |
 
 ### Datos clave
 
