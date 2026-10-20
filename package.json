@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:db": "node --test --test-concurrency=1 \"tests/db/*.test.js\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

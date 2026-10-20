@@ -1,5 +1,16 @@
 import { NOMBRES_DIAS } from "../constants/estados.js";
 
+// Fecha "YYYY-MM-DD" en la hora local del equipo. No usar toISOString(): está
+// en UTC y, desde las 21:00 en Chile, ya devuelve el día siguiente.
+export const isoLocal = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export const sumarDias = (iso, dias) => {
+  const d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + dias);
+  return isoLocal(d);
+};
+
 export const formatFecha = (iso) => {
   const d = new Date(iso + "T12:00:00");
   const meses = [
@@ -16,8 +27,8 @@ export const formatFecha = (iso) => {
     "nov",
     "dic",
   ];
-  const hoy = new Date().toISOString().split("T")[0];
-  const manana = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const hoy = isoLocal();
+  const manana = sumarDias(hoy, 1);
   if (iso === hoy) return `Hoy, ${d.getDate()} ${meses[d.getMonth()]}`;
   if (iso === manana) return `Mañana, ${d.getDate()} ${meses[d.getMonth()]}`;
   return `${NOMBRES_DIAS[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`;
@@ -32,7 +43,7 @@ export const getFechasDisponibles = (
   for (let i = 0; i < 7; i++) {
     const d = new Date(hoy);
     d.setDate(hoy.getDate() + i);
-    const iso = d.toISOString().split("T")[0];
+    const iso = isoLocal(d);
     const dow = d.getDay();
     const bloqueado =
       blockedWeekdays.includes(dow) && !diasDesbloqueados.includes(iso);
@@ -41,29 +52,47 @@ export const getFechasDisponibles = (
   return resultado;
 };
 
+// El cupo es por hora y por sucursal: "19:00", "19:15", "19:30" y "19:45"
+// comparten el bloque de las 19. Cuentan todos los pedidos del bloque,
+// también los completados (la misma regla que aplica create_order en la base).
+export const horaDe = (horario) => String(horario).split(":")[0].padStart(2, "0");
+
+export const cupoDe = (settings, sucursal) => settings?.cupoPorHora?.[sucursal] ?? 4;
+
+export const pedidosEnHora = (fecha, orders, horario, sucursal) =>
+  orders.filter(
+    (o) =>
+      o.fecha === fecha &&
+      o.sucursal === sucursal &&
+      horaDe(o.horario) === horaDe(horario)
+  ).length;
+
+// Bloques de una hora a partir de las franjas: ["17:00", "17:15", "18:00"] → ["17", "18"].
+export const bloquesDe = (timeSlots) => [...new Set(timeSlots.map(horaDe))].sort();
+
+const franjaCercana = (fecha, h, ahora) => {
+  if (fecha !== isoLocal(ahora)) return false;
+  const [hh, mm] = h.split(":").map(Number);
+  const limite = new Date(ahora);
+  limite.setHours(hh, mm, 0, 0);
+  return (limite - ahora) / 60000 < 30;
+};
+
 export const getHorariosDisponibles = (
   fecha,
   orders,
   timeSlots,
-  maxPorHorario = 4
-) => {
-  const hoy = new Date().toISOString().split("T")[0];
-  const ahora = new Date();
+  cupoPorHora = 4,
+  sucursal,
+  ahora = new Date()
+) =>
+  timeSlots.filter(
+    (h) => !franjaCercana(fecha, h, ahora) && pedidosEnHora(fecha, orders, h, sucursal) < cupoPorHora
+  );
 
-  return timeSlots.filter((h) => {
-    if (fecha === hoy) {
-      const [hh, mm] = h.split(":").map(Number);
-      const limiteMs = new Date();
-      limiteMs.setHours(hh, mm, 0, 0);
-      const diffMin = (limiteMs - ahora) / 60000;
-      if (diffMin < 30) return false;
-    }
-    const count = orders.filter(
-      (o) =>
-        o.fecha === fecha &&
-        o.horario === h &&
-        o.estado !== "completado"
-    ).length;
-    return count < maxPorHorario;
-  });
-};
+// Propuesta cuando un bloque está lleno: las siguientes franjas con cupo del
+// mismo día, después de la elegida.
+export const proponerHorarios = (fecha, orders, timeSlots, cupoPorHora, sucursal, desde, cantidad = 3, ahora = new Date()) =>
+  getHorariosDisponibles(fecha, orders, timeSlots, cupoPorHora, sucursal, ahora)
+    .filter((h) => h > desde)
+    .slice(0, cantidad);

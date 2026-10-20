@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fmt } from "../../utils/format.js";
 import { cambiosCosto } from "../../utils/cart.js";
-import { formatFecha } from "../../utils/dates.js";
+import { formatFecha, isoLocal } from "../../utils/dates.js";
 import { labelCompletado } from "../../utils/orders.js";
 import { ESTADOS, getPagos } from "../../constants/estados.js";
 
@@ -37,7 +37,7 @@ export default function ReportesView({ orders, settings, branches }) {
     const blob = new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href=url; a.download=`pedidos_sushi_${new Date().toISOString().split("T")[0]}.csv`;
+    a.href=url; a.download=`pedidos_sushi_${isoLocal()}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 

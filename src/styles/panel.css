@@ -1032,3 +1032,248 @@
     padding: 22px 16px;
   }
 }
+
+/* ── Kanban de pedidos por bloque horario (PRD 02 · Etapa 2) ─────────────── */
+.kanban__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.kanban__bar select,
+.kcard__actions select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.kanban__day {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.kanban__day span {
+  min-width: 128px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.kanban__day button,
+.kanban__today {
+  padding: 7px 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.kanban__today {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.kanban__cupo {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.kanban__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.kanban__stats div {
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
+}
+.kanban__stats strong {
+  display: block;
+  font-size: 22px;
+}
+.kanban__stats span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.kanban__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.kanban__col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #111113;
+  transition: border-color 0.15s, background 0.15s;
+}
+.kanban__col.is-full {
+  border-color: #8a5a14;
+}
+.kanban__col.is-over {
+  border-color: var(--brand-red);
+  background: #1a0f0f;
+}
+.kanban__col.is-target {
+  border-color: #60a5fa;
+  background: #0f1622;
+}
+.kanban__col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+.kanban__col-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+.kanban__occ {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kanban__occ em {
+  font-style: normal;
+}
+.kanban__col.is-full .kanban__occ {
+  color: #f59e0b;
+}
+.kanban__col.is-over .kanban__occ {
+  color: #ff8a80;
+}
+.kanban__empty {
+  margin: 0;
+  padding: 10px 0;
+  color: #5a5a62;
+  font-size: 12px;
+  text-align: center;
+}
+.kcard {
+  border: 1px solid var(--line);
+  border-left: 3px solid;
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: grab;
+}
+.kcard.is-done {
+  opacity: 0.55;
+}
+.kcard__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 10px 6px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.kcard__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.kcard__top b {
+  font-family: monospace;
+}
+.kcard__top > span:not(.kcard__estado) {
+  color: var(--muted);
+}
+.kcard__estado {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.kcard__cliente {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kcard__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.kcard__meta b {
+  color: var(--accent);
+}
+.kcard__actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+.kcard__actions button {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.kcard__actions .kcard__next {
+  flex: 1;
+  font-weight: 700;
+}
+.kcard__actions select {
+  max-width: 96px;
+  padding: 6px;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .kanban__cols {
+    grid-template-columns: 1fr;
+  }
+  .kanban__cupo {
+    margin-left: 0;
+    width: 100%;
+  }
+  .kanban__stats strong {
+    font-size: 18px;
+  }
+}
+
+/* Generador de franjas en Datos del negocio */
+.inline-add--range {
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.inline-add--range label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.inline-add--range input,
+.inline-add--range select {
+  width: auto;
+}

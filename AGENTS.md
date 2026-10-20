@@ -5,9 +5,11 @@ repositorio. **Léelo completo antes de cambiar código, base de datos o
 despliegues.** Actualízalo cuando cambie una decisión, una ruta, una tabla o el
 estado de una etapa.
 
-- Última actualización: 28 de septiembre de 2026.
-- Documento de producto vigente: [`agents/PRD/01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md).
-  Tiene el detalle de cada etapa, los criterios de aceptación y la bitácora.
+- Última actualización: 19 de octubre de 2026 (Etapa 1 del PRD 02).
+- Documento de producto vigente: [`agents/PRD/02-gestion-interna-y-pedidos-online.md`](agents/PRD/02-gestion-interna-y-pedidos-online.md)
+  (fase 2). El anterior, [`01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md),
+  queda como registro de la fase 1. Cada PRD tiene sus etapas, criterios de
+  aceptación y bitácora.
 - Contexto del cliente y del incidente original: `../AGENTS.md`, en la raíz del
   workspace, fuera de este repositorio.
 
@@ -22,10 +24,10 @@ pendiente.
 Sitio y sistema de pedidos de **Sushi Loncoche**, un restaurante con dos
 sucursales en Chile: **Loncoche** y **La Paz** (Sushi Bar Ruta 5).
 
-El sistema heredado (en `main` y en producción en <https://www.sushiloncoche.cl/>)
-era una sola página con cuatro vistas (cliente, admin, cocina y reportes)
-protegidas por PIN. En la rama de trabajo se está construyendo una nueva
-versión:
+El sistema heredado era una sola página con cuatro vistas (cliente, admin,
+cocina y reportes) protegidas por PIN. La fase 1 lo reemplazó por una nueva
+versión, que **ya está en `main` y en producción** en
+<https://www.sushiloncoche.cl/> desde el PR #2 (28 sep 2026):
 
 1. **Landing pública** al estilo de la de Niu Sushi (<https://www.niusushi.cl/>),
    con la identidad de Sushi Loncoche.
@@ -49,14 +51,15 @@ reemplazo de uno que usara el público.
 
 | Rama | Estado |
 |---|---|
-| `main` | Producción. Incluye el PR #1 (`fix/order-number-conflict`, commits `3825e44` y `9af8116`, merge `2e47894`). **No commitear directo.** |
-| `fix/order-number-conflict` | Ya fusionada en `main`. |
-| `feature/frontend-propuesta-fase-1` | **Rama de trabajo actual.** Se creó desde `main` en `2e47894`. Contiene las Etapas A, B y D del PRD 01, en el commit `b1ff0c1`, publicado en GitHub el 24 sep 2026. |
+| `main` | Producción (Vercel). Incluye el PR #1 (`fix/order-number-conflict`, merge `2e47894`) y el PR #2 (`feature/frontend-propuesta-fase-1`, merge `c046d0b`, 28 sep 2026), con las Etapas A, B y D del PRD 01. **No commitear directo.** |
+| `fase-2` | **Rama de trabajo actual** (solo local, sin push). Se creó desde `main` en `c046d0b` el 1 oct 2026 para el PRD 02 (gestión interna y pedidos online con cuenta). |
+| `fix/order-number-conflict` | Ya fusionada en `main` (PR #1). |
+| `feature/frontend-propuesta-fase-1` | Ya fusionada en `main` (PR #2). |
 
-- **Vercel no despliega esta rama:** `vercel.json` tiene
-  `git.deploymentEnabled["feature/frontend-propuesta-fase-1"] = false`, para que
-  el push no genere un Preview conectado a la base de producción. Quitar esa
-  entrada solo cuando las variables de Preview apunten a Pedidos Desarrollo.
+- **Vercel tiene bloqueadas las ramas de trabajo:** `vercel.json` tiene
+  `git.deploymentEnabled` en `false` para `feature/frontend-propuesta-fase-1`
+  y `fase-2` (Etapa 0 del PRD 02, 19 oct 2026), para que un push no genere un
+  Preview conectado a la base de producción.
 - Remoto: <https://github.com/soportecastrocastillogroup-create/sushi-vercel>. El
   repositorio es **público**, así que no se deben subir secretos. Las capturas
   de Niu en `agents/media/referencias/` quedarían visibles.
@@ -79,9 +82,16 @@ reemplazo de uno que usara el público.
 | Lint | ESLint 10 con `react-hooks` 7 (incluye `set-state-in-effect`) y `react-refresh` |
 | Node | v22 (local) |
 
-No hay pruebas automatizadas. La verificación se hace con `npm run lint`,
-`npm run build` y pruebas de navegador (puppeteer-core con Brave, instalado en
-el scratchpad, no en el repositorio).
+Pruebas automatizadas (`node:test`, sin dependencias nuevas):
+- `npm test`: unitarias de `tests/unit/` (lógica de cupos de `utils/dates.js`).
+- `npm run test:db`: integración de `tests/db/` contra **Pedidos Desarrollo**
+  (RLS de pedidos, `create_order`, cupos y pedidos simultáneos). Necesita
+  `.env.local` y `credenciales-prueba.local`, se niega a correr contra otro
+  proyecto, usa una fecha de 2031 y borra lo que crea (consume números de
+  pedido).
+
+Además, `npm run lint`, `npm run build` y pruebas de navegador (puppeteer-core
+con Chrome o Brave, instalado en el scratchpad, no en el repositorio).
 
 ---
 
@@ -147,7 +157,7 @@ src/
 | `/locales` | Público | `LocalesPage` (datos desde `branches`) |
 | `/login` | Público | `LoginPage` |
 | `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/nuevo-pedido` |
-| `/panel/pedidos` | Ambos roles | `AdminView` heredado |
+| `/panel/pedidos` | Ambos roles | `AdminView` heredado con `OrdersKanban`: un día y una sucursal, una columna por bloque de una hora con su ocupación; cambiar estado, abrir detalle (`OrderCard`) y mover de bloque (arrastrar o "⏰") |
 | `/panel/nuevo-pedido` | Ambos roles | `CustomerView` heredado |
 | `/panel/cocina` | Ambos roles | `KitchenView` heredado |
 | `/panel/carta` | `administrador` | `CartaAdminPage` (productos y promos, categorías, extras) |
@@ -200,10 +210,28 @@ Desarrollo**:
 | `20260924190000_staff_auth.sql` | `staff_profiles`, `staff_audit`, las funciones `staff_role()`, `is_staff()`, `is_admin()` y `mark_password_changed()`, y políticas `authenticated` (lectura del catálogo; `staff_all_*` en operación) |
 | `20260924200000_site_cms.sql` | `products.image_url` y `categories.active`; datos de contacto en `branches`; `site_content` y `site_slides` con su contenido inicial; políticas `admin_write_*`; buckets `product-images` (2 MB) y `site-media` (3 MB) |
 | `20260924201000_cms_storage_select.sql` | Lectura de objetos de Storage para administradores, necesaria para poder borrar fotos |
+| `20261019180000_secure_orders.sql` | PRD 02 · Etapa 1: quita `anon_all_*` (en `product_stock` `anon` queda solo con lectura); el personal lee, edita y borra pedidos, pero los crea solo con `create_order()`; revoca `get_next_order_number()`; elimina las columnas de PIN |
+| `20261019190000_hourly_capacity.sql` | PRD 02 · Etapa 2: `branches.cupo_por_hora` (reemplaza a `app_settings.max_por_horario`, que se elimina); `hora_bloque()`; `create_order(p_order, p_items, p_forzar)` valida el cupo del bloque de una hora por sucursal (cuenta todos los estados) y rechaza con `SL409` y `detail` `{hora, pedidos, cupo}`; `p_forzar` deja pasarse del cupo |
+| `20261019200000_slots_until_22.sql` | Franjas base de 17:00 a 22:00 cada 15 min: solo agrega las que falten y reordena; no borra las configuradas |
 
 ### Datos clave
 
-- `orders.order_number` usa `get_next_order_number()`. `order_items` guarda una
+- Los pedidos se crean **solo** con `create_order(p_order jsonb, p_items jsonb)`
+  (`security definer`, exige `is_staff()`): valida sucursal, tipo, fecha,
+  horario e ítems, calcula el total (como `utils/cart.js`, con el
+  `costo_delivery` vigente), toma un bloqueo por sucursal, fecha y hora, e
+  inserta pedido e ítems en una transacción. Devuelve el pedido con
+  `order_items`. Todavía no valida cupos (Etapa 2) ni recalcula precios desde
+  el catálogo (Etapa 5).
+- `orders.order_number` usa `get_next_order_number()`, que solo se llama desde
+  `create_order()`.
+- **Cupo por hora [PRD 02 · Etapa 2]:** `branches.cupo_por_hora` (editable en
+  `/panel/sitio` → Locales). El bloque es la hora completa (20:00–20:59) en esa
+  sucursal y cuentan todos los pedidos, también los completados. Lo valida
+  `create_order()`; el panel puede pasarse con confirmación (`p_forzar`), hoy
+  ambos roles [Por confirmar con el cliente si el colaborador también].
+  En el frontend: `cupoDe`, `pedidosEnHora`, `getHorariosDisponibles` y
+  `proponerHorarios` en `utils/dates.js`; `settings.cupoPorHora` por sucursal. `order_items` guarda una
   copia del nombre y el precio, y `product_id` **no tiene FK**. Borrar un
   producto no rompe el historial.
 - Las sucursales se identifican por `branches.name` en los pedidos
@@ -216,17 +244,17 @@ Desarrollo**:
   `supabase/schema.sql` ni el seed de `scripts/generate-schema.mjs` sobre una
   base en uso: sobrescribe lo que editó el cliente. Los cambios de esquema van
   en una migración nueva.
-- `app_settings` todavía tiene las columnas `admin_pin`, `kitchen_pin` y
-  `reportes_pin`. El frontend ya no las lee, pero `anon` sí puede leerlas. Se
-  eliminan en la Etapa C. Sus valores (y los valores por defecto del seed) no se
-  escriben en ninguna documentación.
+- Las columnas de PIN de `app_settings` se eliminaron en desarrollo
+  (`20261019180000_secure_orders.sql`). En producción siguen hasta publicar
+  la fase 2. Sus valores (y los del seed) no se escriben en ninguna
+  documentación.
 
 ### Seguridad (RLS)
 
 | Quién | Qué puede hacer hoy (Pedidos Desarrollo) |
 |---|---|
-| `anon` | Leer el catálogo, la configuración y el sitio. **Todavía puede leer, escribir y borrar `orders`, `order_items`, `product_stock` y `unlocked_dates`** (política heredada `anon_all_*`). ⚠️ Se cierra en la Etapa C |
-| `authenticated` activo con rol | `is_staff()`: operación diaria (pedidos, stock y fechas) |
+| `anon` | Leer el catálogo, la configuración, el sitio y `product_stock`. **Sin acceso** a `orders`, `order_items` ni `unlocked_dates` (PRD 02 · Etapa 1, 19 oct 2026; en producción sigue abierto hasta publicar) |
+| `authenticated` activo con rol | `is_staff()`: operación diaria (stock y fechas; pedidos: leer, editar y borrar, y crear solo con `create_order()`) |
 | `administrador` | `is_admin()`: además escribe el catálogo, la configuración, el sitio y el Storage, y gestiona cuentas vía Edge Function |
 
 - Cuentas: la Edge Function **`supabase/functions/manage-staff`** (desplegada en
@@ -288,10 +316,16 @@ Desarrollo**:
 | A · Landing, rutas, carta pública con WhatsApp, locales | ✅ Implementada y verificada en local |
 | B · Login, roles, panel, gestión de cuentas, sin PIN | ✅ Implementada y probada contra Pedidos Desarrollo |
 | D · Autoadministración (carta, fotos, promos, portada, locales, negocio) | ✅ Implementada y probada contra Pedidos Desarrollo |
-| **C · Cerrar el acceso de `anon` a pedidos, `create_order` transaccional y borrar las columnas de PIN** | ⏳ **Pendiente. Es el siguiente paso** |
+| C · Cerrar el acceso de `anon` a pedidos, `create_order` transaccional y borrar las columnas de PIN | ✅ Aplicada en Pedidos Desarrollo como Etapa 1 del PRD 02 (19 oct 2026). Pendiente en producción |
 
-**Nada de esto está en producción.** Orden obligatorio para publicar, con
-autorización y respaldo:
+**[Verificado, 1 oct 2026]** El frontend de las Etapas A, B y D **ya está en
+producción**: el PR #2 se fusionó en `main` el 28 sep 2026 y
+<https://www.sushiloncoche.cl/> sirve la versión nueva (logo y tipografías
+nuevas). La Etapa C **no** se aplicó, porque no está en el código.
+
+**[Informado por Bruno Veinz, 1 oct 2026]** Producción está funcionando bien:
+la base, `manage-staff` y las cuentas del personal están operativas. Queda
+pendiente solo la Etapa C (paso 5). Orden que se definió para publicar:
 
 1. Desactivar "Allow new users to sign up" en Auth de producción.
 2. Aplicar las migraciones en Pedidos (producción).
@@ -309,7 +343,18 @@ sus cuentas **antes** del despliegue.
 
 ## 10. Pendientes y datos por confirmar
 
-- Etapa C (seguridad de pedidos).
+- Etapa C (seguridad de pedidos). En el PRD 02 pasa a ser la Etapa 1 y es
+  obligatoria, porque los clientes con cuenta van a crear pedidos.
+- **Fase 2 (correo del 1 oct y reunión del 12 oct 2026 con Jean y Vane; PRD 02
+  reestructurado el 19 oct):** seguridad con `create_order`; cupos por hora
+  configurables por sucursal y kanban de pedidos por bloque horario; inventario
+  diario de insumos; cuadratura de caja; cuentas de clientes (sin cuenta se pide
+  por WhatsApp; con cuenta el pedido se guarda y además llega por WhatsApp);
+  Susheros por correo; dashboard del administrador; cierre de cocina. **No hay
+  áreas por persona:** se mantienen los dos roles. Cambia dos supuestos de este
+  archivo: el público pasará a crear pedidos y "Allow new users to sign up"
+  deberá quedar activado en producción. Preguntas abiertas en la sección 9 del
+  PRD 02.
 - Eliminar las cuentas de prueba de desarrollo `agente.pruebas@example.com` y
   `colab.pruebas@example.com` antes de entregar.
 - Del cliente: logo original y color oficial, fotos de productos y del local,
@@ -331,6 +376,8 @@ npm install
 npm run dev          # http://localhost:5173, contra Pedidos Desarrollo (.env.local)
 npm run lint
 npm run build
+npm test             # unitarias
+npm run test:db      # integración contra Pedidos Desarrollo
 
 npx supabase projects list                     # confirmar que está enlazado con Pedidos Desarrollo
 npx supabase migration list
@@ -339,6 +386,13 @@ npx supabase db push --linked
 npx supabase db query --linked "select ..."    # consultas puntuales en desarrollo
 npx supabase functions deploy manage-staff --project-ref ikzprpnpyvbwsxiqprdt --use-api
 ```
+
+Cuentas de prueba (solo desarrollo): `scripts/seed-test-accounts.mjs` crea o
+restablece `agente.pruebas@example.com` (administrador) y
+`colab.pruebas@example.com` (colaborador) con contraseñas aleatorias, y las
+guarda en `credenciales-prueba.local` (ignorado por Git, no se imprime). Se
+niega a correr si la clave `service_role` no es de Pedidos Desarrollo. El
+comando está en la cabecera del script.
 
 ---
 

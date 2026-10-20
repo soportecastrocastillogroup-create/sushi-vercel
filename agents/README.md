@@ -20,3 +20,4 @@ Trazabilidad del trabajo hecho por personas y agentes de IA en este repositorio.
 ## Índice
 
 - [PRD 01 · Landing page, login seguro y sitio autoadministrable](PRD/01-landing-page-y-login.md) (24 sep 2026)
+- [PRD 02 · Gestión interna y pedidos online con cuenta](PRD/02-gestion-interna-y-pedidos-online.md) (1 oct 2026, reestructurado el 19 oct)

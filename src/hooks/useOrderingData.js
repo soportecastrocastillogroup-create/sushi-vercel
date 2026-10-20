@@ -25,7 +25,7 @@ export function useOrderingData() {
     updStatus,
     delOrder,
     updOrder,
-  } = useOrders(settings?.costoDelivery ?? 0);
+  } = useOrders();
 
   const loaded = !catalogLoading && !settingsLoading && !stockLoading && !ordersLoading;
   const loadError = catalogError || settingsError || stockError || ordersError;

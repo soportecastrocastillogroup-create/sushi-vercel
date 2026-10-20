@@ -1,53 +1,67 @@
 import { useState } from "react";
 import { fmt } from "../../utils/format.js";
 import { cartTotal } from "../../utils/cart.js";
-import { getFechasDisponibles, formatFecha } from "../../utils/dates.js";
+import { getFechasDisponibles, formatFecha, cupoDe, pedidosEnHora, isoLocal } from "../../utils/dates.js";
 import { emptyForm } from "../../utils/orders.js";
+import { cupoLleno } from "../../services/orders.js";
 import { ESTADOS, FUENTES, getPagos, NOMBRES_DIAS } from "../../constants/estados.js";
 
-import OrderCard from "../shared/OrderCard.jsx";
+import OrdersKanban from "./OrdersKanban.jsx";
 import ProductSelector from "../customer/ProductSelector.jsx";
 import { printComanda } from "../shared/Comanda.jsx";
 
 // ── ADMIN VIEW ────────────────────────────────────────────────────────────────
 export default function AdminView({ orders, onAddOrder, onStatusChange, onDeleteOrder, onUpdateOrder, stock, onToggleStock, diasDesbloqueados=[], onToggleDia, menu, customizations, settings, branches, onRefresh }) {
-  const [fSuc,setFSuc]=useState("all");
-  const [fEst,setFEst]=useState("all");
   const [showM,setShowM]=useState(false);
+  const [savingM,setSavingM]=useState(false);
   const [showStock,setShowStock]=useState(false);
   const [showDias,setShowDias]=useState(false);
   const [editOrder,setEditOrder]=useState(null);
   const [mf,setMf]=useState(emptyForm("presencial", branches[0]));
 
-  const filtered=orders
-    .filter(o=>fSuc==="all"||o.sucursal===fSuc)
-    .filter(o=>fEst==="all"||o.estado===fEst)
-    .sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
-
   const activos = orders.filter(o=>o.estado!=="completado").length;
   const alertaPedidos = activos >= settings.alertaPedidos;
-  const stats={
-    total:    orders.length,
-    abiertos: orders.filter(o=>o.estado==="abierto").length,
-    enProceso:orders.filter(o=>o.estado==="en_proceso").length,
-    listos:   orders.filter(o=>o.estado==="listo").length,
-  };
-
   const mfTot=cartTotal(mf.cart,mf.tipo,settings.costoDelivery);
   const mfPagos=getPagos(mf.tipo);
+  const mfCupo=cupoDe(settings, mf.sucursal);
+  const mfOcupacion=h=>pedidosEnHora(mf.fecha, orders, h, mf.sucursal);
+  const mfHorario=mf.horario||settings.timeSlots.find(h=>mfOcupacion(h)<mfCupo)||settings.timeSlots[0]||"";
 
-  const handleAddManual=()=>{
+  // Desde el panel se puede pasar del cupo, con confirmación (PRD 02 · 5.2).
+  const handleAddManual=async()=>{
+    if(savingM) return;
     if(!mf.cliente.nombre.trim()) return alert("Ingresá el nombre del cliente");
     if(mf.cart.length===0) return alert("Agregá al menos un producto");
-    onAddOrder({...mf,items:mf.cart,estado:"abierto",timestamp:new Date().toISOString()});
-    setShowM(false); setMf(emptyForm("presencial", branches[0]));
+    const ocupados=mfOcupacion(mfHorario);
+    let forzar=false;
+    if(ocupados>=mfCupo){
+      if(!window.confirm(`El bloque de las ${mfHorario.split(":")[0]}:00 está lleno (${ocupados}/${mfCupo}). ¿Agregar igual?`)) return;
+      forzar=true;
+    }
+    const order={...mf,horario:mfHorario,items:mf.cart,estado:"abierto",timestamp:new Date().toISOString()};
+    setSavingM(true);
+    try {
+      try {
+        await onAddOrder(order,{ forzar });
+      } catch (error) {
+        const lleno=cupoLleno(error);
+        if(!lleno) throw error;
+        if(!window.confirm(`El bloque de las ${lleno.hora}:00 se llenó (${lleno.pedidos}/${lleno.cupo}). ¿Agregar igual?`)) return;
+        await onAddOrder(order,{ forzar:true });
+      }
+      setShowM(false); setMf(emptyForm("presencial", branches[0]));
+    } catch (error) {
+      alert(`No se pudo crear el pedido: ${error?.message||error}`);
+    } finally {
+      setSavingM(false);
+    }
   };
 
   const iS={width:"100%",padding:"9px 11px",background:"#0E0E10",border:"1px solid #2C2C31",
     borderRadius:8,color:"#F5F5F5",fontSize:13,outline:"none",boxSizing:"border-box"};
 
   return (
-    <div style={{ padding:"20px 16px",maxWidth:680,margin:"0 auto" }}>
+    <div style={{ padding:"20px 16px",maxWidth:1320,margin:"0 auto" }}>
       {/* Alerta 18 pedidos */}
       {alertaPedidos&&(
         <div style={{ background:"#3A1A00",border:"1px solid #C06020",borderRadius:10,
@@ -63,30 +77,7 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
           </div>
         </div>
       )}
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20 }}>
-        {[{l:"Total",v:stats.total,c:"#DCDCE0"},{l:"Abiertos",v:stats.abiertos,c:"#F59E0B"},
-          {l:"En proceso",v:stats.enProceso,c:"#60A5FA"},{l:"Listos",v:stats.listos,c:"#34D399"}
-        ].map(s=>(
-          <div key={s.l} style={{ background:"#18181B",borderRadius:10,padding:"12px 8px",
-            border:"1px solid #2C2C31",textAlign:"center" }}>
-            <div style={{ color:s.c,fontSize:24,fontWeight:700 }}>{s.v}</div>
-            <div style={{ color:"#5A5A62",fontSize:10,marginTop:2 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
       <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center" }}>
-        <select value={fSuc} onChange={e=>setFSuc(e.target.value)}
-          style={{ padding:"8px 10px",background:"#18181B",border:"1px solid #2C2C31",
-            borderRadius:8,color:"#D0D0D5",fontSize:13,outline:"none",cursor:"pointer" }}>
-          <option value="all">Todas las sucursales</option>
-          {branches.map(s=><option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={fEst} onChange={e=>setFEst(e.target.value)}
-          style={{ padding:"8px 10px",background:"#18181B",border:"1px solid #2C2C31",
-            borderRadius:8,color:"#D0D0D5",fontSize:13,outline:"none",cursor:"pointer" }}>
-          <option value="all">Todos los estados</option>
-          {Object.entries(ESTADOS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-        </select>
         <div style={{ flex:1 }}/>
         <button onClick={()=>setShowDias(s=>!s)}
           style={{ padding:"8px 14px",background:showDias?"#60A5FA18":"transparent",
@@ -214,18 +205,10 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
           </p>
         </div>
       )}
-      {filtered.length===0
-        ?<div style={{ textAlign:"center",padding:"48px 0",color:"#34343A" }}>
-            <div style={{ fontSize:32,marginBottom:8 }}>🍱</div>
-            <p style={{ fontSize:14 }}>Sin pedidos con estos filtros</p>
-          </div>
-        :filtered.map(o=>(
-          <OrderCard key={o.id} settings={settings} order={o} onStatusChange={onStatusChange}
-            onDelete={onDeleteOrder}
-            onEdit={o=>setEditOrder({...o})}
-          />
-        ))
-      }
+      <OrdersKanban orders={orders} settings={settings} branches={branches}
+        onStatusChange={onStatusChange} onUpdateOrder={onUpdateOrder} onDeleteOrder={onDeleteOrder}
+        onEdit={o=>setEditOrder({...o})}
+      />
 
       {editOrder&&(
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:200,
@@ -373,7 +356,7 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
             </>)}
             <div style={{ marginBottom:14 }}>
               <label style={{ color:"#8A8A92",fontSize:11,letterSpacing:1,display:"block",marginBottom:6 }}>FECHA</label>
-              <select value={mf.fecha||new Date().toISOString().split("T")[0]}
+              <select value={mf.fecha||isoLocal()}
                 onChange={e=>setMf(m=>({...m,fecha:e.target.value}))} style={iS}>
                 {getFechasDisponibles(diasDesbloqueados, settings.blockedWeekdays).map(({iso})=><option key={iso} value={iso}>{formatFecha(iso)}</option>)}
               </select>
@@ -381,8 +364,11 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14 }}>
               <div>
                 <label style={{ color:"#8A8A92",fontSize:11,letterSpacing:1,display:"block",marginBottom:6 }}>HORARIO</label>
-                <select value={mf.horario} onChange={e=>setMf(m=>({...m,horario:e.target.value}))} style={iS}>
-                  {settings.timeSlots.map(h=><option key={h} value={h}>{h}</option>)}
+                <select value={mfHorario} onChange={e=>setMf(m=>({...m,horario:e.target.value}))} style={iS}>
+                  {settings.timeSlots.map(h=>{
+                    const n=mfOcupacion(h);
+                    return <option key={h} value={h}>{h} · {n}/{mfCupo}{n>=mfCupo?" lleno":""}</option>;
+                  })}
                 </select>
               </div>
               <div>
@@ -415,10 +401,10 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
                 <span style={{ color:"#E53935",fontWeight:700 }}>{fmt(mfTot)}</span>
               </div>
             )}
-            <button onClick={handleAddManual}
-              style={{ width:"100%",padding:"13px",background:"#E53935",border:"none",
-                borderRadius:8,color:"#FFFFFF",fontWeight:700,cursor:"pointer",fontSize:14 }}>
-              Crear pedido
+            <button onClick={handleAddManual} disabled={savingM}
+              style={{ width:"100%",padding:"13px",background:savingM?"#7A2A2A":"#E53935",border:"none",
+                borderRadius:8,color:"#FFFFFF",fontWeight:700,cursor:savingM?"wait":"pointer",fontSize:14 }}>
+              {savingM?"Creando pedido...":"Crear pedido"}
             </button>
           </div>
         </div>

@@ -3,7 +3,8 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "git": {
     "deploymentEnabled": {
-      "feature/frontend-propuesta-fase-1": false
+      "feature/frontend-propuesta-fase-1": false,
+      "fase-2": false
     }
   }
 }
