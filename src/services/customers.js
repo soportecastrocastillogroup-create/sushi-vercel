@@ -11,7 +11,7 @@ const must = ({ data, error }) => {
 export const normalizeEmail = (e) => String(e ?? "").trim().toLowerCase();
 export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
-export async function signUpCustomer({ email, password, nombre, telefono, direccion, referencia, sucursal_preferida, acepta_marketing }) {
+export async function signUpCustomer({ email, password, nombre, telefono, direccion, acepta_marketing }) {
   const { data, error } = await supabase.auth.signUp({
     email: normalizeEmail(email),
     password,
@@ -21,8 +21,6 @@ export async function signUpCustomer({ email, password, nombre, telefono, direcc
         nombre: nombre.trim(),
         telefono: telefono.trim(),
         direccion: direccion.trim(),
-        referencia: referencia.trim(),
-        sucursal_preferida,
         acepta_marketing: !!acepta_marketing,
       },
     },

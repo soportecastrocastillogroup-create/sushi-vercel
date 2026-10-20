@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { useAuth } from "../context/auth-context.js";
 import { usePageTitle } from "../hooks/usePageTitle.js";
-import { fetchBranches } from "../services/catalog.js";
 import { changeMyPassword, fetchMyOrders, updateMyCustomer } from "../services/customers.js";
 import { fmt } from "../utils/format.js";
 import { formatFecha } from "../utils/dates.js";
@@ -20,8 +19,6 @@ const datosDe = (c) => ({
   nombre: c.nombre,
   telefono: c.telefono,
   direccion: c.direccion,
-  referencia: c.referencia,
-  sucursal_preferida: c.sucursal_preferida ?? "",
   acepta_marketing: c.acepta_marketing,
 });
 
@@ -71,19 +68,8 @@ function Pedidos() {
 
 function Datos({ customer, onSaved }) {
   const [form, setForm] = useState(() => datosDe(customer));
-  const [branches, setBranches] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchBranches()
-      .then((b) => !cancelled && setBranches(b))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
 
@@ -119,23 +105,6 @@ function Datos({ customer, onSaved }) {
         <span>Dirección para delivery</span>
         <input value={form.direccion} onChange={set("direccion")} />
       </label>
-      <label className="field">
-        <span>Referencia</span>
-        <input value={form.referencia} onChange={set("referencia")} />
-      </label>
-      {branches.length > 1 && (
-        <label className="field">
-          <span>Sucursal preferida</span>
-          <select value={form.sucursal_preferida} onChange={set("sucursal_preferida")}>
-            <option value="">Sin preferencia</option>
-            {branches.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       <label className="check-line">
         <input type="checkbox" checked={form.acepta_marketing} onChange={set("acepta_marketing")} />
         <span>Acepto recibir novedades y promociones por correo.</span>

@@ -20,6 +20,7 @@ const IngresarPage = lazy(() => import("./pages/IngresarPage.jsx"));
 const RegistroPage = lazy(() => import("./pages/RegistroPage.jsx"));
 const MiCuentaPage = lazy(() => import("./pages/MiCuentaPage.jsx"));
 const CajaPage = lazy(() => import("./panel/CajaPage.jsx"));
+const SusherosPage = lazy(() => import("./panel/SusherosPage.jsx"));
 const sections = () => import("./panel/sections.jsx");
 const OrdersSection = lazy(() => sections().then((m) => ({ default: m.OrdersSection })));
 const NewOrderSection = lazy(() => sections().then((m) => ({ default: m.NewOrderSection })));
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="carta" element={<RequireAdmin><CartaAdminPage /></RequireAdmin>} />
               <Route path="sitio" element={<RequireAdmin><SitioAdminPage /></RequireAdmin>} />
               <Route path="reportes" element={<RequireAdmin><ReportsSection /></RequireAdmin>} />
+              <Route path="susheros" element={<RequireAdmin><SusherosPage /></RequireAdmin>} />
               <Route path="usuarios" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="cuenta" element={<AccountPage />} />
             </Route>

@@ -199,6 +199,20 @@ describe("Etapa 5 · pedido con cuenta", () => {
   });
 });
 
+describe("Etapa 6 · cifras de Susheros", () => {
+  test("el administrador ve las compras de cada cliente; el colaborador y otros clientes no", async () => {
+    const { data: mias } = await admin.from("customer_stats").select("*").eq("customer_id", yo.id).single();
+    const { data: pedidos } = await admin.from("orders").select("total, estado").eq("customer_id", yo.id);
+    assert.equal(mias.compras, pedidos.length);
+    assert.equal(mias.gasto, pedidos.reduce((n, o) => n + o.total, 0));
+    assert.equal(mias.en_curso, pedidos.filter((o) => o.estado !== "completado").length);
+    const { data: colabVe } = await colab.from("customer_stats").select("*");
+    assert.equal(colabVe.length, 0);
+    const { data: c2Ve } = await cliente2.from("customer_stats").select("*").eq("customer_id", yo.id);
+    assert.equal(c2Ve.length, 0);
+  });
+});
+
 describe("Etapa 5 · manage-customers", () => {
   test("solo el administrador la usa", async () => {
     const r = await callFunction(colab, "manage-customers", { action: "set_blocked", customer_id: yo.id, bloqueado: true });

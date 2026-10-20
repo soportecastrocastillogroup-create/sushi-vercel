@@ -66,6 +66,7 @@ function PanelShell() {
       ? [
           { to: "/panel/carta", label: "Carta" },
           { to: "/panel/sitio", label: "Sitio" },
+          { to: "/panel/susheros", label: "Susheros" },
           { to: "/panel/reportes", label: "Reportes" },
           { to: "/panel/usuarios", label: "Usuarios" },
         ]

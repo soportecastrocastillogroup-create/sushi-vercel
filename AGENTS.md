@@ -160,14 +160,15 @@ src/
 | `/locales` | Público | `LocalesPage` (datos desde `branches`) |
 | `/login` | Público | `LoginPage` (acceso del equipo) |
 | `/ingresar` | Público | `IngresarPage`: ingreso de clientes; "olvidé mi contraseña" abre WhatsApp |
-| `/registro` | Público | `RegistroPage`: crea la cuenta de cliente (sin confirmar correo) y muestra el correo en grande |
-| `/mi-cuenta` | Cliente | `MiCuentaPage`: pedidos y estado, datos, consentimiento y contraseña |
+| `/registro` | Público | `RegistroPage`: nombre, correo, contraseña, teléfono, dirección (opcional) y check de novedades; sin confirmar correo; muestra el correo en grande |
+| `/mi-cuenta` | Cliente | `MiCuentaPage`: pedidos y estado, datos (nombre, teléfono, dirección), consentimiento y contraseña |
 | `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/nuevo-pedido` |
 | `/panel/pedidos` | Ambos roles | `AdminView` heredado con `OrdersKanban`: un día y una sucursal, una columna por bloque de una hora con su ocupación; cambiar estado, abrir detalle (`OrderCard`) y mover de bloque (arrastrar o "⏰") |
 | `/panel/nuevo-pedido` | Ambos roles | `CustomerView` heredado |
 | `/panel/cocina` | Ambos roles | `KitchenView` heredado |
 | `/panel/carta` | `administrador` | `CartaAdminPage` (productos y promos, categorías, extras) |
 | `/panel/sitio` | `administrador` | `SitioAdminPage` (portada, locales, datos del negocio) |
+| `/panel/susheros` | `administrador` | `SusherosPage`: lista de clientes con buscador y filtros; la ficha muestra datos, consentimiento, compras, pedidos, notas internas y acciones de cuenta (restablecer contraseña con envío por WhatsApp, cambiar correo, bloquear) |
 | `/panel/reportes` | `administrador` | `ReportesView` heredado |
 | `/panel/usuarios` | `administrador` | `UsersPage` |
 | `/panel/inventario` | Ambos roles | `InventarioPage`: planilla del día por sucursal (ingreso, uso, merma y conteo), movimientos (filtros, editar y borrar) e Insumos (solo administrador). Badge rojo en el menú con los críticos bajo el mínimo (`useInventoryAlerts`) |
@@ -227,6 +228,7 @@ Desarrollo**:
 | `20261020000000_inventory.sql` | PRD 02 · Etapa 3: `inventory_items`, `inventory_item_branches` (mínimo por sucursal) e `inventory_movements` (con signo por tipo; autoría por trigger); `inventory_semaforo()`, vista `inventory_stock` (`security_invoker`) y `inventory_daily(branch, fecha)`. RLS: personal lee todo y escribe movimientos; administrador configura insumos |
 | `20261020010000_cash_closings.sql` | PRD 02 · Etapa 4: `branches.pago_repartidor` (2000, editable en Locales); `cash_closings` (uno por sucursal y día, con las cifras del momento; sin INSERT/UPDATE directos, borra solo el administrador); `cash_summary(branch, fecha)` y `save_cash_closing(branch, fecha, declarado)` (`security definer`, exigen `is_staff()`). La tarifa del repartidor queda fija desde el primer cierre |
 | `20261020020000_customer_accounts.sql` | PRD 02 · Etapa 5: `customers` (ficha por correo; la crea el trigger `on_auth_user_created_customer` cuando el registro trae `tipo = 'cliente'` y se enlaza a una ficha previa), `orders.customer_id` y `cliente_email`, `my_customer_id()`, `update_my_customer()`, `available_slots()`; RLS (cliente: su ficha y sus pedidos; administrador: todas las fichas; colaborador y anon: ninguna); lectura de `product_stock` y `unlocked_dates` para `authenticated`; `create_order` acepta clientes con reglas estrictas (errores `SL409`, `SL422`, `SL429`) |
+| `20261020030000_customer_stats.sql` | PRD 02 · Etapa 6 (primera parte): vista `customer_stats` (`security_invoker`): compras, gasto, ticket promedio, primera y última compra y pedidos en curso por Sushero |
 
 ### Datos clave
 
@@ -273,8 +275,7 @@ Desarrollo**:
 
 - Clientes: la Edge Function **`supabase/functions/manage-customers`**
   (desplegada en desarrollo; solo administradores) tiene `reset_password`,
-  `set_blocked` y `update_email`. La pantalla para usarla llega con Susheros
-  (Etapa 6).
+  `set_blocked` y `update_email`. Se usa desde la ficha en `/panel/susheros`.
 - Cuentas: la Edge Function **`supabase/functions/manage-staff`** (desplegada en
   desarrollo) tiene las acciones `list`, `create`, `update`, `set_active` y
   `reset_password`.

@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router";
 import { useAuth } from "../context/auth-context.js";
 import { BrandLogo } from "../components/site/Brand.jsx";
 import { usePageTitle } from "../hooks/usePageTitle.js";
-import { fetchBranches } from "../services/catalog.js";
 import { EMAIL_RE, normalizeEmail, signUpCustomer } from "../services/customers.js";
 
 const empty = {
@@ -12,8 +11,6 @@ const empty = {
   password: "",
   telefono: "",
   direccion: "",
-  referencia: "",
-  sucursal_preferida: "",
   acepta_marketing: false,
 };
 
@@ -23,21 +20,10 @@ export default function RegistroPage() {
   usePageTitle("Crear cuenta · Sushi Loncoche");
   const auth = useAuth();
   const [form, setForm] = useState(empty);
-  const [branches, setBranches] = useState([]);
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchBranches()
-      .then((b) => !cancelled && setBranches(b))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (!done && !auth.loading && auth.customer) return <Navigate to="/mi-cuenta" replace />;
 
@@ -79,7 +65,7 @@ export default function RegistroPage() {
         ) : (
           <>
             <h1 className="login__title">Crear cuenta</h1>
-            <p className="login__sub">Con tu cuenta armas el pedido, eliges horario y lo sigues desde aquí.</p>
+            <p className="login__sub">Arma tu pedido, elige horario y síguelo desde aquí.</p>
             <form onSubmit={submit} noValidate>
               <label className="field">
                 <span>Nombre</span>
@@ -113,23 +99,6 @@ export default function RegistroPage() {
                 <span>Dirección para delivery (opcional)</span>
                 <input value={form.direccion} onChange={set("direccion")} autoComplete="street-address" placeholder="Calle y número" />
               </label>
-              <label className="field">
-                <span>Referencia (opcional)</span>
-                <input value={form.referencia} onChange={set("referencia")} placeholder="Color de la casa, depto…" />
-              </label>
-              {branches.length > 1 && (
-                <label className="field">
-                  <span>Sucursal preferida</span>
-                  <select value={form.sucursal_preferida} onChange={set("sucursal_preferida")}>
-                    <option value="">Sin preferencia</option>
-                    {branches.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <label className="check-line">
                 <input type="checkbox" checked={form.acepta_marketing} onChange={set("acepta_marketing")} />
                 <span>Acepto recibir novedades y promociones por correo.</span>
