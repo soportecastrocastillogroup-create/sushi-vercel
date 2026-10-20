@@ -173,6 +173,7 @@ export async function saveBranchInfo(b) {
         mapa: b.mapa || null,
         servicios,
         cupo_por_hora: Math.max(1, parseInt(b.cupo_por_hora, 10) || 1),
+        pago_repartidor: Math.max(0, parseInt(b.pago_repartidor, 10) || 0),
       })
       .eq("id", b.id)
   );

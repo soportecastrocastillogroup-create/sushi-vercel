@@ -16,6 +16,7 @@ const AccountPage = lazy(() => import("./panel/AccountPage.jsx"));
 const CartaAdminPage = lazy(() => import("./panel/CartaAdminPage.jsx"));
 const SitioAdminPage = lazy(() => import("./panel/SitioAdminPage.jsx"));
 const InventarioPage = lazy(() => import("./panel/InventarioPage.jsx"));
+const CajaPage = lazy(() => import("./panel/CajaPage.jsx"));
 const sections = () => import("./panel/sections.jsx");
 const OrdersSection = lazy(() => sections().then((m) => ({ default: m.OrdersSection })));
 const NewOrderSection = lazy(() => sections().then((m) => ({ default: m.NewOrderSection })));
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="nuevo-pedido" element={<NewOrderSection />} />
               <Route path="cocina" element={<KitchenSection />} />
               <Route path="inventario" element={<InventarioPage />} />
+              <Route path="caja" element={<CajaPage />} />
               <Route path="carta" element={<RequireAdmin><CartaAdminPage /></RequireAdmin>} />
               <Route path="sitio" element={<RequireAdmin><SitioAdminPage /></RequireAdmin>} />
               <Route path="reportes" element={<RequireAdmin><ReportsSection /></RequireAdmin>} />

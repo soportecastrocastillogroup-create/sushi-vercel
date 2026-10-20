@@ -265,6 +265,19 @@ function LocalesTab({ data, reload, flash }) {
               bloquean al tomar pedidos.
             </small>
           </label>
+          <label className="field">
+            <span>Pago al repartidor por delivery (CLP)</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={b.pago_repartidor}
+              onChange={(e) => edit(b.id, { pago_repartidor: e.target.value })}
+            />
+            <small className="panel-muted">
+              Lo que se le paga al repartidor por cada delivery (no es lo que se cobra al cliente). Se usa en la cuadratura de caja.
+            </small>
+          </label>
           <button type="submit" className="btn btn--primary btn--sm">
             Guardar {b.name}
           </button>

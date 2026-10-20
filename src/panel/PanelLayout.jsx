@@ -61,6 +61,7 @@ function PanelShell() {
     { to: "/panel/nuevo-pedido", label: "Nuevo pedido" },
     { to: "/panel/cocina", label: "Cocina" },
     { to: "/panel/inventario", label: "Inventario", badge: inventory.alerts.length, alert: true },
+    { to: "/panel/caja", label: "Caja" },
     ...(auth.isAdmin
       ? [
           { to: "/panel/carta", label: "Carta" },
