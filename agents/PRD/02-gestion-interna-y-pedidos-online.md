@@ -4,9 +4,10 @@
 |---|---|
 | Fecha de creación | 1 de octubre de 2026 |
 | Última reestructuración | 19 de octubre de 2026, tras la reunión del 12 de octubre |
-| Estado | Borrador reestructurado, pendiente de revisión de Bruno Veinz |
+| Última actualización | 20 de octubre de 2026 |
+| Estado | **En implementación.** Etapas 0 a 5 terminadas y probadas en Pedidos Desarrollo; Etapa 6 a medias. Nada publicado en producción (ver sección 0) |
 | Pedido por | Jean y Vane (Sushi Loncoche): correo del 1 oct y reunión del 12 oct 2026 |
-| Rama de trabajo | `fase-2` (creada desde `main` en `c046d0b`, solo local) |
+| Rama de trabajo | `fase-2` (creada desde `main` en `c046d0b`, solo local, sin push). Último commit: `2344f49` |
 | Base de datos de desarrollo | Supabase `Pedidos Desarrollo` (`ikzprpnpyvbwsxiqprdt`) |
 | Base de datos de producción | Supabase `Pedidos` (`caaqivncmufjrslrqejx`). No se toca hasta publicar |
 | PRD anterior | [PRD 01 · Landing page, login seguro y sitio autoadministrable](01-landing-page-y-login.md) |
@@ -14,6 +15,37 @@
 Convención del documento: **[Verificado]** = comprobado en código, base de datos o sitio.
 **[Informado]** = lo dijo el equipo o el cliente. **[Decidido]** = acordado con Bruno Veinz.
 **[Por confirmar]** = supuesto que falta validar.
+
+---
+
+## 0. Dónde estamos (20 de octubre de 2026)
+
+**Resumen:** todo lo construido está en la rama `fase-2` (solo local) y
+aplicado únicamente en **Pedidos Desarrollo**. Producción (`Pedidos`) y `main`
+no se han tocado: el sitio en <https://www.sushiloncoche.cl/> sigue siendo el de
+la fase 1. Cómo se hizo cada cosa está en la sección 10.
+
+| Etapa | Estado | Commit |
+|---|---|---|
+| 0 · Preparación | ✅ Hecha | `1ea1c31` |
+| 1 · Seguridad (`create_order`, `anon` sin acceso a pedidos, sin PIN) | ✅ Hecha y probada | `1ea1c31` |
+| 2 · Cupos por hora y kanban (más horario 17:00–22:00 y "Hoy" en hora local) | ✅ Hecha y probada | `1ea1c31` |
+| 3 · Inventario de insumos | ✅ Hecha y probada | `2ece0d5` |
+| 4 · Cuadratura de caja | ✅ Hecha y probada | `e28ffd2` |
+| 5 · Cuentas de clientes y pedido online | ✅ Hecha y probada (registro verificado tras desactivar "Confirm email") | `3cee35f`, `99ea296` |
+| 6 · Susheros | 🟡 A medias: lista y ficha con pedidos y acciones de cuenta listas; faltan segmentos, CSV y correo opcional en los pedidos del panel | `2344f49` |
+| 7 · Dashboard | ⏳ Pendiente | |
+| 8 · Cierre de cocina | ⏳ Pendiente | |
+| Publicación en producción | ⏳ Pendiente (pasos en la sección 10.10) | |
+
+**Estado de las pruebas al último commit:** `npm run lint` y `npm run build`
+pasan; `npm test` 11 de 11; `npm run test:db` 44 de 44 contra Pedidos
+Desarrollo; más de 100 verificaciones de navegador en escritorio y 390 px
+(sección 10.9).
+
+**Siguiente paso propuesto:** terminar la Etapa 6 (segmentos, CSV y correo
+opcional en "Nuevo pedido" y "+ Pedido manual"), luego Dashboard (7) y Cierre de
+cocina (8), y después preparar la publicación.
 
 ---
 
@@ -47,7 +79,10 @@ Resumen, sin copiar el texto original.
 
 ---
 
-## 2. Estado actual relevante
+## 2. Estado del sistema antes de la fase 2
+
+Diagnóstico del 19 de octubre, antes de implementar. Lo que cambió está en la
+sección 10.
 
 - **[Verificado]** El único "stock" que existe es `product_stock`: un sí o no
   de "agotado" por **producto de la carta**, igual para ambas sucursales. No
@@ -109,6 +144,13 @@ Resumen, sin copiar el texto original.
 | Login de clientes | Solo **correo y contraseña** escritos a mano. Sin Google ni otros proveedores | [Decidido, 19 oct] |
 | Correos a clientes | **Sin SMTP**: no se confirma el correo ni se envían correos. Si alguien olvida su contraseña, escribe por WhatsApp y el administrador la restablece | [Decidido, 19 oct] |
 | Extras de handrolls | **Fuera del alcance** por ahora | [Decidido, 19 oct] |
+| Horario de pedidos | Base de **17:00 a 22:00** cada 15 minutos, configurable por el administrador (Sitio → Datos del negocio) | [Decidido, 19 oct] |
+| Pasarse del cupo desde el panel | Mientras el cliente no responda, **ambos roles** pueden pasarse con confirmación. Un cliente con cuenta nunca | [Provisional, 19 oct; por confirmar] |
+| Precio de los pedidos | Del panel se guarda el precio que envía el formulario (las promos y extras se calculan ahí) y el total lo calcula la base. En pedidos de clientes la base recalcula todo desde el catálogo | [Decidido, 19 oct] |
+| Pedidos en curso por cuenta | Máximo **3** pedidos sin completar por cuenta de cliente | [Propuesto, 20 oct; por confirmar] |
+| Datos del registro | Nombre, correo, contraseña, teléfono, dirección (opcional) y el check. **Sin sucursal preferida ni referencia** (la card quedaba muy larga) | [Decidido, 20 oct] |
+| Egresos en la caja | El repartidor y los otros egresos se pagan en **efectivo** | [Supuesto, 20 oct; por confirmar] |
+| "Confirm email" en Auth | Desactivado en Pedidos Desarrollo (lo hizo Bruno Veinz el 20 oct). En producción se hará al publicar | [Hecho en desarrollo] |
 
 ---
 
@@ -265,9 +307,11 @@ Por sucursal y día. **[Decidido]**
 | Sin cuenta | Ve la carta completa. En lugar de "Agregar al carrito" ve **"Pedir por WhatsApp"** (abre WhatsApp con un saludo y, si eligió un producto, su nombre) y la invitación a **crear su cuenta** |
 | Con cuenta | Arma el carrito, elige sucursal, retiro o delivery, fecha y horario con cupo, y envía. El pedido **se guarda en la base** (con origen "Cuenta web"), aparece en el kanban y **se abre WhatsApp** con el resumen y el número de pedido |
 
-- **Registro:** nombre, correo, contraseña, teléfono, dirección y referencia
-  (opcionales, para delivery), sucursal preferida y el check de consentimiento.
-  Al pedir, los datos vienen ya completos y se pueden cambiar en el pedido.
+- **Registro [actualizado, 20 oct]:** nombre, correo, contraseña, teléfono,
+  dirección (opcional, para delivery) y el check de consentimiento. Se quitaron
+  la sucursal preferida y la referencia porque alargaban demasiado el
+  formulario. Al pedir, los datos vienen ya completos y se pueden cambiar en
+  el pedido (la referencia se puede escribir ahí si es delivery).
 - **Mi cuenta (`/mi-cuenta`):** editar datos, cambiar contraseña y ver el
   historial y el estado de sus pedidos.
 - **Login:** el mismo Supabase Auth del personal, pero separado por tabla: un
@@ -285,8 +329,8 @@ Por sucursal y día. **[Decidido]**
   Es el mismo esquema que ya se usa con el personal.
 - **Gestión de cuentas de clientes:** Edge Function nueva `manage-customers`
   (solo administradores, `service_role` solo en el servidor), con las acciones
-  `reset_password` y `set_active` (bloquear una cuenta abusiva). Cambiar el
-  correo de una cuenta también pasa por aquí.
+  `reset_password`, `set_blocked` (bloquear una cuenta abusiva) y
+  `update_email`.
 - Como el correo no se verifica, el formulario lo muestra grande en la
   confirmación ("Tu cuenta es ana@gmail.com") para que el cliente detecte un
   error de tipeo.
@@ -383,17 +427,17 @@ sabores de handroll están escritos en el código (`CustomizationModal.jsx:117` 
 
 ## 6. Etapas
 
-| Etapa | Contenido | Depende de |
-|---|---|---|
-| **0 · Preparación** | Bloquear `fase-2` en `vercel.json` y reanudar Pedidos Desarrollo si está pausado | |
-| **1 · Seguridad** | Sección 5.1, con `create_order` | |
-| **2 · Cupos y kanban** | Sección 5.2 | 1 |
-| **3 · Inventario** | Sección 5.3 | |
-| **4 · Caja** | Sección 5.4 | |
-| **5 · Cuentas de clientes** | Sección 5.5 | 1 y 2 |
-| **6 · Susheros** | Sección 5.6 | 5 |
-| **7 · Dashboard** | Sección 5.7 | 3, 4 y 6 |
-| **8 · Cierre de cocina** | Sección 5.8 | 3 |
+| Etapa | Contenido | Depende de | Estado |
+|---|---|---|---|
+| **0 · Preparación** | Bloquear `fase-2` en `vercel.json` y reanudar Pedidos Desarrollo si está pausado | | ✅ |
+| **1 · Seguridad** | Sección 5.1, con `create_order` | | ✅ |
+| **2 · Cupos y kanban** | Sección 5.2 | 1 | ✅ |
+| **3 · Inventario** | Sección 5.3 | | ✅ |
+| **4 · Caja** | Sección 5.4 | | ✅ |
+| **5 · Cuentas de clientes** | Sección 5.5 | 1 y 2 | ✅ |
+| **6 · Susheros** | Sección 5.6 | 5 | 🟡 |
+| **7 · Dashboard** | Sección 5.7 | 3, 4 y 6 | ⏳ |
+| **8 · Cierre de cocina** | Sección 5.8 | 3 | ⏳ |
 
 Cada etapa es una migración nueva en `supabase/migrations/`, se aplica y se
 prueba **solo en Pedidos Desarrollo** y se registra en la bitácora. La
@@ -403,36 +447,43 @@ publicación en producción se hace al final, con autorización y respaldo.
 
 ## 7. Criterios de aceptación
 
-- `anon` no puede leer ni escribir `orders`, `order_items`, `customers` ni las
-  tablas de inventario y caja (comprobado con la clave pública).
-- Con el cupo de La Paz en 4 por hora y 4 pedidos en el bloque 20:00, un
-  cliente con cuenta no puede pedir a las 20:15 y se le proponen franjas de las
-  21:00 o después. Los pedidos de Loncoche no afectan el cupo de La Paz.
-- Dos pedidos enviados a la vez al último cupo de un bloque: solo uno entra.
-- Cambiar el cupo por hora en el panel cambia los horarios disponibles sin
+✅ = verificado en Pedidos Desarrollo (prueba automática o de navegador).
+⏳ = pendiente.
+
+- ✅ `anon` no puede leer ni escribir `orders`, `order_items`, `customers` ni
+  las tablas de inventario y caja (comprobado con la clave pública en
+  `tests/db/`).
+- ✅ Con el bloque lleno, un cliente con cuenta no puede pedir en ese bloque y
+  se le proponen franjas más tarde. Los pedidos de Loncoche no afectan el cupo
+  de La Paz.
+- ✅ Dos pedidos enviados a la vez al último cupo de un bloque: solo uno entra
+  (probado con 5 simultáneos).
+- ✅ Cambiar el cupo por hora en el panel cambia los horarios disponibles sin
   tocar código.
-- El kanban muestra los pedidos del día por bloque con su ocupación, permite
+- ✅ El kanban muestra los pedidos del día por bloque con su ocupación, permite
   cambiar el estado y mover un pedido de bloque, y funciona en 390 px.
-- Un visitante sin cuenta no puede armar carrito y llega a WhatsApp. Un cliente
-  con cuenta envía un pedido que aparece en el kanban y abre WhatsApp con el
-  número de pedido.
-- Un cliente nunca entra al panel, y solo ve sus propios datos y pedidos.
-- Un cliente se registra y entra de inmediato, sin correo de confirmación. El
-  administrador le restablece la contraseña desde su ficha y el cliente entra
-  con la nueva.
-- Un correo escrito distinto (`Ana@Gmail.com ` o `ana@gmail.com`) cae en la
-  misma ficha, venga de una cuenta o de un pedido del panel.
-- Un movimiento cambia el stock de esa sucursal y no el de la otra. Un insumo
-  crítico bajo su mínimo aparece en rojo y en el badge, y la alerta desaparece
-  al registrar un ingreso que lo deja sobre el mínimo.
-- Editar o borrar un movimiento recalcula el stock y deja registro de quién lo
-  hizo.
-- La cuadratura muestra los deliveries del día y el pago al repartidor con la
-  tarifa de esa sucursal. Cambiar la tarifa no altera cierres anteriores.
-- Un colaborador no ve Dashboard, Susheros, Reportes ni la configuración, y la
-  base rechaza sus lecturas de `customers` (RLS, no solo el menú).
-- La exportación de Susheros, por defecto, incluye solo a quienes aceptaron.
-- `npm run lint` y `npm run build` pasan. Las pantallas nuevas funcionan en
+- ✅ Un visitante sin cuenta no puede armar carrito y llega a WhatsApp. Un
+  cliente con cuenta envía un pedido que aparece en el kanban y abre WhatsApp
+  con el número de pedido (con un toque; ver 10.6).
+- ✅ Un cliente nunca entra al panel, y solo ve sus propios datos y pedidos.
+- ✅ Un cliente se registra y entra de inmediato, sin correo de confirmación.
+  El administrador le restablece la contraseña desde su ficha y el cliente
+  entra con la nueva.
+- 🟡 Un correo escrito distinto (`Ana@Gmail.com ` o `ana@gmail.com`) cae en la
+  misma ficha: verificado desde la cuenta y desde `manage-customers`; falta el
+  correo en los pedidos del panel (Etapa 6).
+- ✅ Un movimiento cambia el stock de esa sucursal y no el de la otra. Un
+  insumo crítico bajo su mínimo aparece en rojo y en el badge, y la alerta
+  desaparece al reponer.
+- ✅ Editar o borrar un movimiento recalcula el stock y deja registro de quién
+  lo hizo.
+- ✅ La cuadratura muestra los deliveries del día y el pago al repartidor con
+  la tarifa de esa sucursal. Cambiar la tarifa no altera cierres anteriores.
+- 🟡 Un colaborador no ve Susheros, Reportes ni la configuración, y la base
+  rechaza sus lecturas de `customers` (RLS, no solo el menú). Falta el
+  Dashboard (Etapa 7).
+- ⏳ La exportación de Susheros, por defecto, incluye solo a quienes aceptaron.
+- ✅ `npm run lint` y `npm run build` pasan. Las pantallas nuevas funcionan en
   390 px sin scroll horizontal.
 
 ---
@@ -457,11 +508,278 @@ publicación en producción se hace al final, con autorización y respaldo.
 ## 9. Pendientes con el cliente
 
 - Si el colaborador también puede pasar del cupo con confirmación, o solo el
-  administrador (5.2).
+  administrador (5.2). Hoy pueden ambos; restringirlo es un cambio de una
+  línea en `create_order`.
+- Si **3 pedidos en curso por cuenta** es un buen límite (5.5).
+- Si el repartidor y los otros egresos se pagan **en efectivo**, como supone la
+  cuadratura (5.4).
+- Horario real de pedidos de cada local. Hoy es 17:00–22:00 para ambos; las
+  franjas son las mismas para las dos sucursales.
 
 ---
 
-## 10. Bitácora
+## 10. Cómo se implementó
+
+Registro técnico de lo construido entre el 19 y el 20 de octubre de 2026. El
+detalle día a día está en la bitácora (sección 11).
+
+### 10.1 Forma de trabajo
+
+- **Entorno local conectado a desarrollo.** `.env.local` (ignorado por Git)
+  apunta a Pedidos Desarrollo y Vite lo prioriza sobre `.env`, que conserva
+  los valores de producción. El Supabase CLI quedó enlazado solo con Pedidos
+  Desarrollo (`supabase link --project-ref ikzprpnpyvbwsxiqprdt`); antes de
+  cada `db push` se confirmó el proyecto enlazado y se revisó con `--dry-run`.
+- **Regla acordada con Bruno Veinz:** todo se verifica en local y en Pedidos
+  Desarrollo; nada se sube a producción, no se hace push ni PR.
+- **Una migración por cambio** en `supabase/migrations/`; nunca se editó una
+  migración ya aplicada.
+- **La base es la que valida.** Las reglas de negocio importantes (crear
+  pedidos, cupos, precios de clientes, stock, cuadratura, autoría) viven en
+  funciones de Postgres y en RLS, no solo en la pantalla. El navegador puede
+  mostrar lo mismo para la experiencia, pero la base decide.
+- **Cuentas de prueba:** `scripts/seed-test-accounts.mjs` crea o restablece
+  `agente.pruebas` (administrador), `colab.pruebas` (colaborador),
+  `cliente.pruebas` y `cliente2.pruebas` (clientes) con contraseñas aleatorias
+  que guarda en `credenciales-prueba.local` (ignorado por Git). Se niega a
+  correr si la clave `service_role` no es de Pedidos Desarrollo.
+- **Verificación de cada etapa:** `npm run lint`, `npm run build`, pruebas
+  automáticas (`npm test` y `npm run test:db`) y pruebas de navegador con
+  puppeteer-core y Chrome (en el scratchpad, fuera del repositorio), en
+  escritorio y a 390 px. Toda prueba que crea datos los borra al terminar y se
+  comprobó que la base quedara igual.
+
+### 10.2 Etapas 0 y 1 · Preparación y seguridad
+
+- **Etapa 0:** `vercel.json` agrega `"fase-2": false` en
+  `git.deploymentEnabled`, para que un push accidental no cree un Preview
+  conectado a la base de producción.
+- **Migración `20261019180000_secure_orders.sql`:**
+  - Quita las políticas `anon_all_*`. `anon` ya no lee ni escribe `orders`,
+    `order_items` ni `unlocked_dates`; en `product_stock` queda solo lectura.
+  - El personal lee, edita y borra pedidos, pero **ya no los inserta directo**.
+  - Nueva función `create_order(p_order, p_items, p_forzar)` (`security
+    definer`): única vía para crear un pedido. Valida sucursal, tipo, fecha,
+    horario e ítems; toma un bloqueo (`pg_advisory_xact_lock`) por sucursal,
+    fecha y hora; calcula el total como `utils/cart.js` con el
+    `costo_delivery` vigente; asigna el número con `get_next_order_number()` e
+    inserta pedido e ítems en una sola transacción. Devuelve el pedido con sus
+    ítems.
+  - Se revoca `get_next_order_number()` a `anon` y `authenticated`.
+  - Se eliminan `admin_pin`, `kitchen_pin` y `reportes_pin`.
+- **Frontend:** `services/orders.js` llama a la RPC en vez de insertar; el
+  pedido trae `total` desde la base.
+
+### 10.3 Etapa 2 · Cupos por hora y kanban
+
+- **Migración `20261019190000_hourly_capacity.sql`:**
+  - `branches.cupo_por_hora` (parte en 4, el valor de `max_por_horario`, que se
+    elimina). Función `hora_bloque('20:15') = 20`.
+  - `create_order` cuenta los pedidos del bloque de una hora **en esa
+    sucursal**, incluidos los completados, y si está lleno rechaza con el
+    código propio **`SL409`** y un `detail` JSON `{hora, pedidos, cupo}`. Con
+    `p_forzar` el personal puede pasarse.
+- **Migración `20261019200000_slots_until_22.sql`:** agrega las franjas que
+  faltaban hasta las 22:00 sin borrar las existentes.
+- **Lógica compartida en `utils/dates.js`:** `horaDe`, `cupoDe`,
+  `pedidosEnHora`, `bloquesDe`, `getHorariosDisponibles`, `proponerHorarios`,
+  `franjaCercana`. `settings.cupoPorHora` trae el cupo de cada sucursal.
+- **"Nuevo pedido":** si la base responde `SL409`, muestra "El bloque de las
+  20:00 ya está lleno (4/4)", hasta 3 horarios propuestos y "Agregar igual".
+- **"+ Pedido manual":** cada franja muestra su ocupación ("20:15 · 4/4
+  lleno") y pide confirmación antes de pasarse.
+- **Kanban (`components/admin/OrdersKanban.jsx`, en `/panel/pedidos`):** un
+  día y una sucursal; una columna por hora con su ocupación, marcada "lleno" o
+  "sobrecupo"; tarjetas con número, hora, cliente, tipo, origen, total y
+  estado; avanzar y retroceder estado; detalle con el `OrderCard` de siempre
+  (editar, comanda, eliminar); mover de bloque arrastrando o con el selector
+  ⏰, con confirmación si el destino está lleno. En 390 px las columnas se
+  apilan.
+- **Sitio → Locales:** campo "Pedidos por hora" por sucursal. **Sitio → Datos
+  del negocio:** generador "Desde / Hasta / Cada 15, 30 o 60 min" además de
+  agregar o quitar franjas sueltas.
+- **Corrección de "Hoy" en UTC:** todo el frontend usaba `toISOString()`, así
+  que desde las 21:00 en Chile el sistema ya mostraba el día siguiente. Se
+  reemplazó por `isoLocal()` y `sumarDias()` en fechas, formularios, kanban y
+  el CSV de reportes. Verificado a las 23:38 del 19 de octubre.
+
+### 10.4 Etapa 3 · Inventario de insumos
+
+- **Migración `20261020000000_inventory.sql`:**
+  - `inventory_items` (nombre único sin importar mayúsculas, unidad, crítico,
+    activo, orden), `inventory_item_branches` (en qué sucursal se usa y su
+    mínimo) e `inventory_movements` (`ingreso`, `uso`, `merma`, `ajuste`; la
+    base exige el signo correcto de la cantidad).
+  - **Autoría por trigger:** `created_by_nombre` y `updated_by_nombre` los
+    pone la base desde `staff_profiles`; el navegador no puede falsearlos.
+  - **El stock no se guarda, se calcula:** vista `inventory_stock`
+    (`security_invoker`) y función `inventory_daily(sucursal, fecha)` con
+    inicio, ingresos, uso, merma, ajustes y stock al cierre del día.
+  - `inventory_semaforo()`: rojo si el stock es ≤ 0 o está bajo el mínimo;
+    amarillo si está a menos de un 25 % sobre el mínimo; verde el resto.
+  - Un insumo con movimientos no se puede borrar (se desactiva).
+  - RLS: el personal lee todo y escribe movimientos; solo el administrador
+    configura insumos y mínimos.
+- **Pantalla `/panel/inventario`** (`panel/InventarioPage.jsx`):
+  - *Planilla del día:* por sucursal y fecha, una tarjeta por insumo con
+    semáforo, registro rápido de ingreso, uso y merma, y **Conteo** (se anota
+    el stock contado y se registra el ajuste por la diferencia).
+  - *Alertas:* críticos bajo el mínimo arriba de la planilla y **badge rojo**
+    en el menú (`hooks/useInventoryAlerts.js`).
+  - *Movimientos:* historial con filtros (sucursal, insumo, tipo, persona y
+    fechas), editar y borrar con confirmación.
+  - *Insumos* (solo administrador): crear, editar, desactivar y mínimos por
+    sucursal.
+
+### 10.5 Etapa 4 · Cuadratura de caja
+
+- **Migración `20261020010000_cash_closings.sql`:**
+  - `branches.pago_repartidor` (2000 en ambas, editable en Locales).
+  - `cash_closings`: un cierre por sucursal y día con las cifras del momento
+    (pedidos, pendientes, ventas, desglose por método, deliveries, tarifa y
+    total del repartidor), lo declarado y el resultado. Sin INSERT ni UPDATE
+    directos; solo el administrador borra.
+  - `cash_summary(sucursal, fecha)`: lo que trae el sistema.
+  - `save_cash_closing(sucursal, fecha, declarado)`: calcula y guarda (crea o
+    edita). La **tarifa del repartidor queda fija desde el primer cierre**.
+    Registra quién cerró y quién editó.
+- **Fórmula** (igual en la base y en `utils/caja.js`; una prueba compara
+  ambas): ventas en efectivo = "pago al retirar" − tarjetas declaradas;
+  efectivo esperado = fondo + ventas en efectivo − (repartidor + otros
+  egresos); diferencia de efectivo = contado − esperado; diferencia de
+  transferencias = declaradas − sistema; diferencia total = suma de ambas.
+- **Pantalla `/panel/caja`** (`panel/CajaPage.jsx`): lo que trae el sistema
+  (con aviso de pedidos sin completar y lista por hora), lo que hay en caja,
+  resultado en vivo en verde o rojo, cerrar o guardar cambios, y cierres
+  anteriores.
+
+### 10.6 Etapa 5 · Cuentas de clientes y pedido online
+
+- **Migración `20261020020000_customer_accounts.sql`:**
+  - `customers` (correo en minúsculas y único, datos de contacto,
+    consentimiento con fecha y origen, baja, bloqueo y notas) y
+    `orders.customer_id` / `cliente_email`.
+  - **Alta automática:** trigger `on_auth_user_created_customer` en
+    `auth.users`. Solo actúa si el registro trae `tipo = 'cliente'` (las
+    cuentas del personal no lo traen). Si ya existía una ficha con ese correo,
+    la enlaza y conserva su historial y notas. El check solo **otorga**
+    consentimiento.
+  - `update_my_customer()`: el cliente edita nombre, teléfono, dirección y
+    consentimiento (no notas, bloqueo ni correo). Desmarcar el check deja
+    `baja_at`.
+  - **RLS:** el cliente ve su ficha y sus pedidos (sin editarlos); el
+    administrador ve todas las fichas; el colaborador y `anon`, ninguna. Con
+    sesión de cliente se puede leer `product_stock` y `unlocked_dates` (antes
+    un cliente con sesión habría visto todo como disponible).
+  - `available_slots(sucursal, fecha)`: cupo por franja sin exponer pedidos.
+  - **`create_order` para clientes:** cupo sin excepciones (ignora
+    `p_forzar`); del navegador solo toma producto, cantidad y opciones, y
+    precios, nombres y categorías salen del catálogo; valida que el producto
+    esté activo, disponible y en esa sucursal, y que las opciones existan en
+    `promo_options`; fecha entre hoy y 6 días más en un día abierto; franja
+    existente y a más de 30 minutos; nombre y teléfono obligatorios; dirección
+    en delivery; delivery solo con transferencia; máximo 3 pedidos sin
+    completar por cuenta. Errores para el cliente: `SL422` (dato no válido),
+    `SL429` (demasiados pedidos) y `SL409` (bloque lleno). El origen queda
+    `cuenta_web`.
+- **Edge Function `manage-customers`** (desplegada solo en desarrollo; solo
+  administradores; `service_role` solo en el servidor): `reset_password`,
+  `set_blocked` (banea en Auth) y `update_email`. Deja registro en
+  `staff_audit`.
+- **Auth de desarrollo:** "Allow new users to sign up" ya estaba activado;
+  Bruno Veinz desactivó "Confirm email" el 20 de octubre (verificado en
+  `/auth/v1/settings`).
+- **Sitio público:**
+  - `AuthProvider` carga además la ficha del cliente (`useAuth().customer`).
+  - *Sin cuenta:* no hay carrito; cada producto tiene un botón de WhatsApp y
+    la carta invita a crear cuenta o ingresar.
+  - *Con cuenta:* el `CartDrawer` pide sucursal, tipo, día (solo días
+    abiertos), horario (las franjas llenas aparecen tachadas), datos
+    precargados y pago; guarda el pedido y muestra "¡Recibimos tu pedido
+    #…!" con el botón **Enviar por WhatsApp** (mensaje con número, día, hora,
+    productos y total, de `buildAccountOrderMessage`). Es un toque porque los
+    navegadores bloquean abrir WhatsApp solo después de guardar.
+  - Páginas `/registro` (muestra el correo en grande al terminar),
+    `/ingresar` ("olvidé mi contraseña" abre WhatsApp con el correo) y
+    `/mi-cuenta` (pedidos con estado, datos, novedades y contraseña). El
+    header muestra "Ingresar" o "Mi cuenta".
+  - El kanban y la ficha muestran el origen "🧑 Cuenta web".
+
+### 10.7 Etapa 6 · Susheros (primera parte)
+
+- **Migración `20261020030000_customer_stats.sql`:** vista `customer_stats`
+  (`security_invoker`) con compras, gasto, ticket promedio, primera y última
+  compra y pedidos en curso.
+- **Pantalla `/panel/susheros`** (`panel/SusherosPage.jsx`, solo
+  administrador): lista con buscador y filtros (todos, aceptan correos, con
+  compras, bloqueados). La ficha muestra datos, consentimiento, cifras, todos
+  sus pedidos con productos y estado, notas internas y acciones de cuenta:
+  restablecer contraseña (se muestra una vez, con botón para enviarla por
+  WhatsApp al cliente), cambiar correo y bloquear o desbloquear.
+- **Menú del panel:** con 10 secciones para el administrador se compactó bajo
+  1500 px para que entren completas desde 1024 px.
+- **Falta:** segmentos con umbrales en `app_settings`, exportación CSV (por
+  defecto solo quienes aceptaron) y correo opcional con consentimiento en
+  "Nuevo pedido" y "+ Pedido manual" (crea o enlaza la ficha).
+
+### 10.8 Mapa de archivos
+
+| Área | Archivos |
+|---|---|
+| Migraciones | `20261019180000_secure_orders`, `20261019190000_hourly_capacity`, `20261019200000_slots_until_22`, `20261020000000_inventory`, `20261020010000_cash_closings`, `20261020020000_customer_accounts`, `20261020030000_customer_stats` |
+| Edge Functions | `supabase/functions/manage-customers/index.ts` (nueva) |
+| Servicios | `services/orders.js` (RPC y `cupoLleno`), `inventory.js`, `caja.js`, `customers.js`, `susheros.js`; `settings.js` y `cms.js` actualizados |
+| Utilidades | `utils/dates.js` (cupos y fechas locales), `utils/caja.js`, `utils/whatsappOrder.js` (`buildAccountOrderMessage`) |
+| Panel | `components/admin/OrdersKanban.jsx`, `AdminView.jsx`, `customer/CustomerView.jsx`, `panel/InventarioPage.jsx`, `CajaPage.jsx`, `SusherosPage.jsx`, `SitioAdminPage.jsx`, `PanelLayout.jsx`, `hooks/useInventoryAlerts.js` |
+| Sitio | `components/site/CartDrawer.jsx`, `SiteHeader.jsx`, `ProductModal.jsx`, `pages/MenuPage.jsx`, `IngresarPage.jsx`, `RegistroPage.jsx`, `MiCuentaPage.jsx`, `context/AuthProvider.jsx` |
+| Estilos | `styles/panel.css` (kanban, inventario, caja, Susheros, menú compacto), `styles/site.css` (cuentas, carrito con cuenta) |
+| Pruebas | `tests/unit/dates.test.js`, `tests/unit/caja.test.js`, `tests/db/helpers.js`, `orders.test.js`, `inventory.test.js`, `caja.test.js`, `customers.test.js` |
+| Scripts | `scripts/seed-test-accounts.mjs` |
+
+### 10.9 Pruebas
+
+| Comando | Qué cubre | Resultado |
+|---|---|---|
+| `npm test` | Cupos, fechas locales y fórmula de la caja | 11 de 11 |
+| `npm run test:db` | Contra Pedidos Desarrollo: RLS de `anon`, `create_order` y sus validaciones, cupo por sucursal, 5 pedidos simultáneos al último cupo (entra 1), inventario (signo, autoría, semáforo, planilla, alertas), caja (resumen, fórmula igual a la del frontend, tarifa fija, permisos), clientes (ficha por trigger, RLS de datos personales, precios del catálogo, reglas del pedido, límite de 3, cupo estricto) y `manage-customers` | 44 de 44 |
+| Navegador (puppeteer, fuera del repo) | Kanban (16), horarios (5), inventario (15), caja (11), compra con cuenta (15), registro (9), Susheros (15), menú del panel, "Hoy" en hora local; en escritorio y 390 px | Todas pasan (detalle en la bitácora) |
+
+- Las pruebas de base usan fechas de 2031 o fechas reales de la semana (las
+  de clientes) y borran lo que crean. Consumen números de pedido: en
+  desarrollo la secuencia ya pasó del #100.
+- Para correrlas hacen falta `.env.local` y `credenciales-prueba.local`.
+
+### 10.10 Cómo publicar (pendiente, con autorización)
+
+Nada de esto está en producción. Cuando se decida publicar:
+
+1. Respaldo de la base de producción (`Pedidos`).
+2. En Auth de producción: "Allow new users to sign up" **activado** y
+   "Confirm email" **desactivado**.
+3. Aplicar en producción las migraciones `20261019180000` a la última, en
+   orden, revisando antes con `--dry-run` y con el CLI enlazado a producción
+   solo para ese paso.
+4. Desplegar `manage-customers` en producción.
+5. Revisar en producción: horario de pedidos, cupo por hora y pago al
+   repartidor de cada local, y cargar los insumos.
+6. Cambiar las variables de Preview de Vercel a Pedidos Desarrollo, quitar
+   `fase-2` de `git.deploymentEnabled`, hacer push y abrir el PR.
+7. Merge a `main`, verificar el despliegue y probar un pedido real con una
+   cuenta.
+8. Borrar las cuentas de prueba de desarrollo antes de entregar.
+
+### 10.11 Notas de desarrollo
+
+- En Pedidos Desarrollo hay 2 pedidos reales de prueba manual (#001 y #023);
+  las pruebas automáticas no los tocan.
+- `.env` sigue con los valores de producción; `.env.local` tiene prioridad.
+  Conviene renombrar `.env` para evitar sustos.
+- Las columnas `customers.referencia` y `customers.sucursal_preferida` siguen
+  en la base, aunque el registro ya no las pide.
+
+---
+
+## 11. Bitácora
 
 | Fecha | Quién | Qué |
 |---|---|---|
@@ -496,3 +814,4 @@ publicación en producción se hace al final, con autorización y respaldo.
 | 20 oct 2026 | Bruno Veinz · Agente | Bruno desactiva "Confirm email" en Pedidos Desarrollo; verificado en `/auth/v1/settings` (`mailer_autoconfirm = true`, `disable_signup = false`). Prueba de registro en navegador a 390 px (9 verificaciones): el registro deja la sesión abierta, muestra el correo normalizado en grande, crea la ficha con teléfono, dirección y consentimiento "Registro web"; un correo repetido avisa que ya existe; y una ficha previa sin cuenta (con notas) se enlaza al registrarse con el mismo correo, sin duplicarse. Cuentas y fichas de prueba borradas. Commit `3cee35f` (Etapa 5) |
 | 20 oct 2026 | Bruno Veinz (decisión) | El registro tenía demasiados campos: se quitan **sucursal preferida** y **referencia** del registro y de Mi cuenta (quedan nombre, correo, contraseña, teléfono, dirección opcional y el check). Las columnas siguen en `customers`. El administrador debe ver todos los Susheros registrados, pinchar uno y ver su información y sus pedidos |
 | 20 oct 2026 | Agente | **Etapa 6, primera parte, aplicada en Pedidos Desarrollo** (`20261020030000_customer_stats.sql`). `/panel/susheros` (solo administrador, también en el menú): lista con buscador (nombre, correo, teléfono) y filtros (todos, aceptan correos, con compras, bloqueados), con pedidos, gasto y última compra; la ficha muestra datos, consentimiento con fecha y origen, cifras de compra, todos sus pedidos con productos y estado, notas internas editables y acciones de cuenta (restablecer contraseña: se muestra una vez con botón para enviarla por WhatsApp al teléfono del cliente; cambiar correo; bloquear o desbloquear con confirmación). El menú del panel se compacta bajo 1500 px para que las 10 secciones del administrador entren a 1024 px. Pruebas: 1 nueva de integración (44 en total, todas pasan) y 15 verificaciones de navegador (14 a la primera; la del menú se revisó con captura y con una prueba aparte a 1366, 1280 y 1024 px). Datos restaurados. Pendiente de la Etapa 6: segmentos, exportación CSV y correo opcional con consentimiento en los pedidos del panel |
+| 20 oct 2026 | Agente | Commit `2344f49` (Susheros y registro corto). Se reorganiza este PRD: sección 0 con el estado actual, estado por etapa y por criterio, decisiones nuevas en la sección 3, pendientes con el cliente actualizados y sección 10 con cómo se implementó cada etapa, el mapa de archivos, las pruebas y los pasos para publicar |

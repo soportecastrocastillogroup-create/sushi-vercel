@@ -360,6 +360,14 @@ sus cuentas **antes** del despliegue.
 
 ---
 
+### Estado de la fase 2 (PRD 02, 20 oct 2026)
+
+Etapas 0 a 5 terminadas y probadas en Pedidos Desarrollo; Etapa 6 (Susheros) a
+medias; Etapas 7 y 8 pendientes. Todo en la rama `fase-2` (solo local, sin
+push); **nada publicado en producción**. El estado al día, cómo se hizo cada
+etapa y los pasos para publicar están en las secciones 0 y 10 del
+[PRD 02](agents/PRD/02-gestion-interna-y-pedidos-online.md).
+
 ## 10. Pendientes y datos por confirmar
 
 - Etapa C (seguridad de pedidos). En el PRD 02 pasa a ser la Etapa 1 y es
