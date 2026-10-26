@@ -113,7 +113,7 @@ export default function MenuPage() {
         {!customer && (
           <div className="menu__account">
             <p>
-              <strong>Crea tu cuenta para armar tu pedido aquí</strong>, elegir día y horario, y seguirlo desde Mi cuenta. Sin
+              <strong>Crea tu cuenta para armar tu pedido aquí</strong>, elegir el horario de hoy y seguirlo desde Mi cuenta. Sin
               cuenta, pide cada producto directo por WhatsApp.
             </p>
             <div>

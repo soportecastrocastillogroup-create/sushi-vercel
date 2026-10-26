@@ -3,14 +3,16 @@
 // cuenta validado en la base y gestión de cuentas con manage-customers.
 //
 // Usa cliente.pruebas y cliente2.pruebas (scripts/seed-test-accounts.mjs).
-// Los clientes solo pueden pedir para los próximos 7 días, así que estas
-// pruebas crean pedidos en fechas reales y los borran al terminar.
+// Los clientes solo pueden pedir para hoy, así que estas pruebas crean pedidos
+// para hoy y los borran al terminar. Si hoy es un día cerrado lo desbloquean, y
+// si ya no quedan franjas a más de 30 minutos agregan una (23:45); ambas cosas
+// se revierten al final. No corren después de las 23:15.
 // Run: npm run test:db
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { anonClient, callFunction, credentials, isoChile, login } from "./helpers.js";
+import { anonClient, callFunction, credentials, horaChile, isoChile, login } from "./helpers.js";
 
-let admin, colab, cliente, cliente2, yo, producto, promo, fecha, slots, cupoOriginal;
+let admin, colab, cliente, cliente2, yo, producto, promo, fecha, slots, cupoOriginal, desbloqueado, franjaExtra;
 const ids = [];
 
 const pedido = (extra = {}) => ({
@@ -48,17 +50,28 @@ before(async () => {
   producto = ok.find((p) => p.promo_options.length === 0);
   promo = ok.find((p) => p.promo_options.length > 0);
 
-  // Primer día abierto desde mañana (para no chocar con la regla de 30 minutos).
+  // Hoy, abierto y con al menos una franja a más de 30 minutos.
+  fecha = isoChile(0);
+  const ahora = horaChile(30);
+  assert.ok(ahora > "00:30" && ahora < "23:45", "estas pruebas no corren después de las 23:15 (hora de Chile)");
   const { data: blocked } = await colab.from("blocked_weekdays").select("dow");
   const { data: unlocked } = await colab.from("unlocked_dates").select("date");
-  const cerrados = new Set(blocked.map((b) => b.dow));
-  const abiertos = new Set(unlocked.map((u) => u.date));
-  for (let i = 1; i <= 6 && !fecha; i++) {
-    const iso = isoChile(i);
-    if (!cerrados.has(new Date(iso + "T12:00:00Z").getUTCDay()) || abiertos.has(iso)) fecha = iso;
+  if (blocked.some((b) => b.dow === new Date(fecha + "T12:00:00Z").getUTCDay()) && !unlocked.some((u) => u.date === fecha)) {
+    const { error } = await colab.from("unlocked_dates").insert({ date: fecha });
+    assert.ifError(error);
+    desbloqueado = fecha;
   }
   const { data: s } = await cliente.rpc("available_slots", { p_sucursal: "La Paz", p_fecha: fecha });
-  slots = s.map((x) => x.slot);
+  // Primero las franjas de bloques vacíos, por si hay pedidos de hoy (p. ej. de
+  // scripts/seed-demo-data.mjs).
+  const futuras = s.filter((x) => x.slot.padStart(5, "0") > ahora);
+  slots = [...futuras.filter((x) => x.pedidos === 0), ...futuras.filter((x) => x.pedidos > 0)].map((x) => x.slot);
+  if (slots.length === 0) {
+    const { error } = await admin.from("time_slots").insert({ slot: "23:45", sort_order: 999 });
+    assert.ifError(error);
+    franjaExtra = "23:45";
+    slots = [franjaExtra];
+  }
   ({ data: { cupo_por_hora: cupoOriginal } } = await admin.from("branches").select("cupo_por_hora").eq("name", "La Paz").single());
 });
 
@@ -66,6 +79,8 @@ after(async () => {
   if (!admin) return;
   if (ids.length) await admin.from("orders").delete().in("id", ids);
   await admin.from("branches").update({ cupo_por_hora: cupoOriginal }).eq("name", "La Paz");
+  if (desbloqueado) await colab.from("unlocked_dates").delete().eq("date", desbloqueado);
+  if (franjaExtra) await admin.from("time_slots").delete().eq("slot", franjaExtra);
   if (yo) {
     await admin
       .from("customers")
@@ -155,7 +170,7 @@ describe("Etapa 5 · pedido con cuenta", () => {
       pedido({ tipo: "delivery", direccion: "Calle 123", metodoPago: "pago_contra_entrega" }),
       pedido({ horario: "16:07" }),
       pedido({ fecha: isoChile(-1) }),
-      pedido({ fecha: isoChile(10) }),
+      pedido({ fecha: isoChile(1) }),
     ];
     for (const o of casos) {
       const { error } = await crear(cliente, o);
@@ -180,11 +195,12 @@ describe("Etapa 5 · pedido con cuenta", () => {
   });
 
   test("máximo 3 pedidos sin completar por cuenta", async () => {
-    // Una franja por hora (18, 19, 20 y 21) para no chocar con el cupo.
-    const porHora = [...new Map(slots.map((h) => [h.split(":")[0], h])).values()].slice(1, 5);
-    for (const h of porHora.slice(0, 3)) assert.ifError((await crear(cliente, pedido({ horario: h }))).error);
-    const r = await crear(cliente, pedido({ horario: porHora[3] }));
+    // Cupo alto para que el límite que salte sea el de pedidos por cuenta.
+    await admin.from("branches").update({ cupo_por_hora: 99 }).eq("name", "La Paz");
+    for (let i = 0; i < 3; i++) assert.ifError((await crear(cliente, pedido())).error);
+    const r = await crear(cliente, pedido());
     assert.equal(r.error?.code, "SL429");
+    await admin.from("branches").update({ cupo_por_hora: cupoOriginal }).eq("name", "La Paz");
   });
 
   test("cada cliente ve solo sus pedidos y no los edita", async () => {

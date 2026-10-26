@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Link, Navigate, useOutletContext } from "react-router";
 import { useAuth } from "../context/auth-context.js";
 import { usePageTitle } from "../hooks/usePageTitle.js";
 import { changeMyPassword, fetchMyOrders, updateMyCustomer } from "../services/customers.js";
 import { fmt } from "../utils/format.js";
-import { formatFecha } from "../utils/dates.js";
+import { formatFecha, rangoBloque } from "../utils/dates.js";
 
 // Estados del pedido como los ve el cliente.
 const ESTADO_CLIENTE = {
@@ -23,6 +23,7 @@ const datosDe = (c) => ({
 });
 
 function Pedidos() {
+  const { timeSlots } = useOutletContext();
   const [orders, setOrders] = useState(null);
   const [error, setError] = useState("");
 
@@ -54,7 +55,7 @@ function Pedidos() {
             <span className="account-order__estado">{estadoLabel(o)}</span>
           </div>
           <p className="account__muted">
-            {formatFecha(o.fecha)} · {o.horario} · {o.sucursal} · {o.tipo === "delivery" ? "Delivery" : "Retiro"}
+            {formatFecha(o.fecha)} · {rangoBloque(o.horario, timeSlots)} · {o.sucursal} · {o.tipo === "delivery" ? "Delivery" : "Retiro"}
           </p>
           <p className="account-order__items">
             {o.order_items.map((i) => `${i.qty}× ${i.nombre}${i.opciones_str ? ` (${i.opciones_str})` : ""}`).join(" · ")}

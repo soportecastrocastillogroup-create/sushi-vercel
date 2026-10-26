@@ -188,8 +188,9 @@ src/
   guardar.
 - **Pedido público [PRD 02 · Etapa 5]:** sin cuenta no hay carrito: cada
   producto se pide por WhatsApp y la carta invita a crear cuenta. Con cuenta
-  (`useAuth().customer`), el `CartDrawer` elige día, horario con cupo
-  (`available_slots`), datos y pago, guarda el pedido con `create_order`
+  (`useAuth().customer`), el `CartDrawer` pide **solo para hoy** (si hoy está
+  cerrado, avisa y deriva a WhatsApp), con bloques de una hora con cupo
+  (`available_slots`, agrupados con `bloquesCliente`), datos y pago, guarda el pedido con `create_order`
   (origen `cuenta_web`) y ofrece enviar el resumen con el número por WhatsApp
   (`buildAccountOrderMessage`).
 
@@ -229,6 +230,7 @@ Desarrollo**:
 | `20261020010000_cash_closings.sql` | PRD 02 · Etapa 4: `branches.pago_repartidor` (2000, editable en Locales); `cash_closings` (uno por sucursal y día, con las cifras del momento; sin INSERT/UPDATE directos, borra solo el administrador); `cash_summary(branch, fecha)` y `save_cash_closing(branch, fecha, declarado)` (`security definer`, exigen `is_staff()`). La tarifa del repartidor queda fija desde el primer cierre |
 | `20261020020000_customer_accounts.sql` | PRD 02 · Etapa 5: `customers` (ficha por correo; la crea el trigger `on_auth_user_created_customer` cuando el registro trae `tipo = 'cliente'` y se enlaza a una ficha previa), `orders.customer_id` y `cliente_email`, `my_customer_id()`, `update_my_customer()`, `available_slots()`; RLS (cliente: su ficha y sus pedidos; administrador: todas las fichas; colaborador y anon: ninguna); lectura de `product_stock` y `unlocked_dates` para `authenticated`; `create_order` acepta clientes con reglas estrictas (errores `SL409`, `SL422`, `SL429`) |
 | `20261020030000_customer_stats.sql` | PRD 02 · Etapa 6 (primera parte): vista `customer_stats` (`security_invoker`): compras, gasto, ticket promedio, primera y última compra y pedidos en curso por Sushero |
+| `20261026120000_customer_orders_today.sql` | `create_order`: el pedido de un cliente es solo para hoy (antes, hasta 6 días); el personal puede seguir cargando otros días |
 
 ### Datos clave
 
@@ -421,6 +423,13 @@ restablece `agente.pruebas@example.com` (administrador),
 guarda en `credenciales-prueba.local` (ignorado por Git, no se imprime). Se
 niega a correr si la clave `service_role` no es de Pedidos Desarrollo. El
 comando está en la cabecera del script.
+
+Datos de demostración (solo desarrollo): `node scripts/seed-demo-data.mjs`
+borra los anteriores y crea 16 Susheros (`@demo.example.com`), unos 200
+pedidos (tres semanas, hoy y el próximo día abierto), 12 insumos con
+movimientos y cierres de caja, usando las cuentas de prueba y las funciones de
+la app. `--clean` solo borra. Las marcas para reconocerlos están en la cabecera
+del script. Si hoy está cerrado, lo desbloquea y eso no se revierte.
 
 ---
 

@@ -5,7 +5,7 @@ import { useAuth } from "../../context/auth-context.js";
 import { fmt } from "../../utils/format.js";
 import { waLink } from "../../utils/whatsapp.js";
 import { buildAccountOrderMessage } from "../../utils/whatsappOrder.js";
-import { franjaCercana, formatFecha, getFechasDisponibles } from "../../utils/dates.js";
+import { bloquesCliente, formatFecha, getFechasDisponibles, textoBloque } from "../../utils/dates.js";
 import { getPagos } from "../../constants/estados.js";
 import { createCustomerOrder, fetchAvailableSlots, fetchUnlockedDates } from "../../services/customers.js";
 import { CloseIcon, WhatsAppIcon } from "./Icons.jsx";
@@ -15,22 +15,25 @@ const pagoLabel = (tipo, id) =>
     .find((p) => p.id === id)
     ?.label.replace(" — tarjeta (crédito/débito) o efectivo", " (tarjeta o efectivo)") ?? id;
 
-// Fechas abiertas de los próximos 7 días.
-function useFechas(blockedWeekdays) {
-  const [unlocked, setUnlocked] = useState([]);
+// El pedido con cuenta es solo para hoy (es comida): { iso, abierto }, o null
+// mientras se cargan los días desbloqueados.
+function useHoy(blockedWeekdays) {
+  const [unlocked, setUnlocked] = useState(null);
   useEffect(() => {
     let cancelled = false;
     fetchUnlockedDates()
       .then((d) => !cancelled && setUnlocked(d))
-      .catch(() => {});
+      .catch(() => !cancelled && setUnlocked([]));
     return () => {
       cancelled = true;
     };
   }, []);
-  return getFechasDisponibles(unlocked, blockedWeekdays ?? []).filter((f) => !f.bloqueado);
+  if (!unlocked) return null;
+  const [hoy] = getFechasDisponibles(unlocked, blockedWeekdays ?? []);
+  return { iso: hoy.iso, abierto: !hoy.bloqueado };
 }
 
-// Franjas con su cupo para una sucursal y fecha (sin ver los pedidos).
+// Bloques de una hora con su cupo para una sucursal y fecha (sin ver los pedidos).
 function useSlots(branch, fecha, version) {
   const [state, setState] = useState({ key: "", slots: null });
   const key = `${branch}|${fecha}|${version}`;
@@ -45,13 +48,12 @@ function useSlots(branch, fecha, version) {
     };
   }, [branch, fecha, key]);
   const slots = state.key === key ? state.slots : null;
-  return slots?.map((s) => ({ ...s, disponible: s.disponible && !franjaCercana(fecha, s.slot) })) ?? null;
+  return slots ? bloquesCliente(fecha, slots) : null;
 }
 
 function Checkout({ customer, cart, branch, branches, onBranchChange, costoDelivery, whatsappNum, blockedWeekdays, onDone }) {
-  const fechas = useFechas(blockedWeekdays);
+  const hoy = useHoy(blockedWeekdays);
   const [tipo, setTipo] = useState("retiro");
-  const [fechaSel, setFecha] = useState("");
   const [horario, setHorario] = useState("");
   const [version, setVersion] = useState(0);
   const [nombre, setNombre] = useState(customer.nombre);
@@ -63,7 +65,7 @@ function Checkout({ customer, cart, branch, branches, onBranchChange, costoDeliv
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  const fecha = fechas.some((f) => f.iso === fechaSel) ? fechaSel : fechas[0]?.iso ?? "";
+  const fecha = hoy?.abierto ? hoy.iso : "";
   const slots = useSlots(branch, fecha, version);
   const libres = (slots ?? []).filter((s) => s.disponible);
   const horarioOk = libres.some((s) => s.slot === horario) ? horario : "";
@@ -102,9 +104,9 @@ function Checkout({ customer, cart, branch, branches, onBranchChange, costoDeliv
     } catch (err) {
       if (err.code === "SL409") {
         // El bloque se llenó: se recargan los cupos y se proponen los siguientes.
-        const frescos = await fetchAvailableSlots(branch, fecha).catch(() => []);
-        const propuestas = frescos.filter((s) => s.disponible && s.slot > horarioOk && !franjaCercana(fecha, s.slot)).slice(0, 3);
-        setError({ lleno: true, hora: horarioOk, propuestas: propuestas.map((s) => s.slot) });
+        const frescos = bloquesCliente(fecha, await fetchAvailableSlots(branch, fecha).catch(() => []));
+        const propuestas = frescos.filter((b) => b.disponible && b.slot > horarioOk).slice(0, 3);
+        setError({ lleno: true, hora: slots.find((b) => b.slot === horarioOk)?.label ?? horarioOk, propuestas });
         setHorario("");
         setVersion((v) => v + 1);
       } else {
@@ -165,55 +167,35 @@ function Checkout({ customer, cart, branch, branches, onBranchChange, costoDeliv
         </fieldset>
 
         <fieldset className="field">
-          <legend>Día</legend>
-          {fechas.length === 0 ? (
-            <p className="cart__hint">No hay días abiertos esta semana. Escríbenos por WhatsApp.</p>
-          ) : (
-            <div className="chips">
-              {fechas.map((f) => (
-                <button
-                  key={f.iso}
-                  type="button"
-                  className={f.iso === fecha ? "is-active" : ""}
-                  aria-pressed={f.iso === fecha}
-                  onClick={() => {
-                    setFecha(f.iso);
-                    setHorario("");
-                    setError(null);
-                  }}
-                >
-                  {formatFecha(f.iso)}
-                </button>
-              ))}
-            </div>
-          )}
-        </fieldset>
-
-        <fieldset className="field">
-          <legend>Horario</legend>
-          {!slots ? (
+          <legend>Horario de hoy</legend>
+          {!hoy || (hoy.abierto && !slots) ? (
             <p className="cart__hint">Cargando horarios…</p>
+          ) : !hoy.abierto ? (
+            <p className="cart__hint">Hoy no estamos recibiendo pedidos. Escríbenos por WhatsApp.</p>
           ) : libres.length === 0 ? (
-            <p className="cart__hint">No quedan horarios con cupo este día. Elige otro día.</p>
+            <p className="cart__hint">Ya no quedan horarios con cupo hoy. Escríbenos por WhatsApp.</p>
           ) : (
-            <div className="chips chips--slots">
-              {slots.map((s) => (
-                <button
-                  key={s.slot}
-                  type="button"
-                  disabled={!s.disponible}
-                  className={s.slot === horarioOk ? "is-active" : ""}
-                  aria-pressed={s.slot === horarioOk}
-                  title={s.disponible ? undefined : "Lleno"}
-                  onClick={() => {
-                    setHorario(s.slot);
-                    setError(null);
-                  }}
-                >
-                  {s.slot}
-                </button>
-              ))}
-            </div>
+            <>
+              <p className="cart__hint">{formatFecha(fecha)}</p>
+              <div className="chips chips--slots">
+                {slots.map((s) => (
+                  <button
+                    key={s.slot}
+                    type="button"
+                    disabled={!s.disponible}
+                    className={s.slot === horarioOk ? "is-active" : ""}
+                    aria-pressed={s.slot === horarioOk}
+                    title={s.disponible ? undefined : "Lleno"}
+                    onClick={() => {
+                      setHorario(s.slot);
+                      setError(null);
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </fieldset>
 
@@ -260,20 +242,20 @@ function Checkout({ customer, cart, branch, branches, onBranchChange, costoDeliv
               <>
                 <p>
                   Ese horario ({error.hora}) ya está lleno.
-                  {error.propuestas.length ? " Te proponemos:" : " No quedan horarios más tarde este día: elige otro día."}
+                  {error.propuestas.length ? " Te proponemos:" : " No quedan horarios más tarde hoy. Escríbenos por WhatsApp."}
                 </p>
                 {error.propuestas.length > 0 && (
                   <div className="chips">
-                    {error.propuestas.map((h) => (
+                    {error.propuestas.map((b) => (
                       <button
-                        key={h}
+                        key={b.slot}
                         type="button"
                         onClick={() => {
-                          setHorario(h);
+                          setHorario(b.slot);
                           setError(null);
                         }}
                       >
-                        {h}
+                        {b.label}
                       </button>
                     ))}
                   </div>
@@ -307,7 +289,7 @@ function Checkout({ customer, cart, branch, branches, onBranchChange, costoDeliv
   );
 }
 
-export default function CartDrawer({ branch, branches, onBranchChange, costoDelivery, whatsappNum, blockedWeekdays }) {
+export default function CartDrawer({ branch, branches, onBranchChange, costoDelivery, whatsappNum, blockedWeekdays, timeSlots }) {
   const cart = useCart();
   const auth = useAuth();
   const [done, setDone] = useState(null); // { order, pago }
@@ -331,7 +313,7 @@ export default function CartDrawer({ branch, branches, onBranchChange, costoDeli
     setOpen(false);
     setDone(null);
   };
-  const whatsapp = done ? waLink(whatsappNum, buildAccountOrderMessage(done.order, done.pago)) : "";
+  const whatsapp = done ? waLink(whatsappNum, buildAccountOrderMessage(done.order, done.pago, timeSlots)) : "";
 
   return (
     <div className="drawer drawer--cart" role="dialog" aria-modal="true" aria-label="Tu pedido">
@@ -347,7 +329,7 @@ export default function CartDrawer({ branch, branches, onBranchChange, costoDeli
         {!auth.customer ? (
           <div className="cart__empty">
             <p className="cart__sent-title">Crea tu cuenta para pedir aquí</p>
-            <p>Con tu cuenta eliges día y horario, y sigues tu pedido. Si prefieres, pide directo por WhatsApp.</p>
+            <p>Con tu cuenta eliges el horario de hoy y sigues tu pedido. Si prefieres, pide directo por WhatsApp.</p>
             <Link to="/registro" className="btn btn--primary" onClick={close}>
               Crear cuenta
             </Link>
@@ -364,7 +346,7 @@ export default function CartDrawer({ branch, branches, onBranchChange, costoDeli
           <div className="cart__empty">
             <p className="cart__sent-title">¡Recibimos tu pedido {done.order.order_number}!</p>
             <p>
-              {formatFecha(done.order.fecha)} a las {done.order.horario} en {done.order.sucursal}. Total {fmt(done.order.total)}.
+              {formatFecha(done.order.fecha)}, {textoBloque(done.order.horario, timeSlots)}, en {done.order.sucursal}. Total {fmt(done.order.total)}.
             </p>
             <p>Envíanos el resumen por WhatsApp para coordinar el pago. Puedes ver el estado en Mi cuenta.</p>
             <a className="btn btn--primary" href={whatsapp} target="_blank" rel="noreferrer">

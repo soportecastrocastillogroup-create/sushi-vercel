@@ -55,6 +55,12 @@ export async function callFunction(client, name, body) {
 
 export const credentials = (rol) => creds[rol];
 
+// Hora "HH:MM" en Chile, desplazada `minutos` desde ahora.
+export function horaChile(minutos = 0) {
+  const d = new Date(Date.now() + minutos * 60000);
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "America/Santiago", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+}
+
 // Fecha "YYYY-MM-DD" en Chile, desplazada `dias` desde hoy.
 export function isoChile(dias = 0) {
   const d = new Date(Date.now() + dias * 86400000);
