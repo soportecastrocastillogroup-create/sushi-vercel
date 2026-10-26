@@ -52,7 +52,7 @@ reemplazo de uno que usara el público.
 | Rama | Estado |
 |---|---|
 | `main` | Producción (Vercel). Incluye el PR #1 (`fix/order-number-conflict`, merge `2e47894`) y el PR #2 (`feature/frontend-propuesta-fase-1`, merge `c046d0b`, 28 sep 2026), con las Etapas A, B y D del PRD 01. **No commitear directo.** |
-| `fase-2` | **Rama de trabajo actual** (solo local, sin push). Se creó desde `main` en `c046d0b` el 1 oct 2026 para el PRD 02 (gestión interna y pedidos online con cuenta). |
+| `fase-2` | **Rama de trabajo actual** publicada en GitHub desde el 26 oct 2026 para trabajar desde otro equipo (Vercel no la despliega). Se creó desde `main` en `c046d0b` el 1 oct 2026 para el PRD 02 (gestión interna y pedidos online con cuenta). |
 | `fix/order-number-conflict` | Ya fusionada en `main` (PR #1). |
 | `feature/frontend-propuesta-fase-1` | Ya fusionada en `main` (PR #2). |
 
@@ -365,8 +365,8 @@ sus cuentas **antes** del despliegue.
 ### Estado de la fase 2 (PRD 02, 20 oct 2026)
 
 Etapas 0 a 5 terminadas y probadas en Pedidos Desarrollo; Etapa 6 (Susheros) a
-medias; Etapas 7 y 8 pendientes. Todo en la rama `fase-2` (solo local, sin
-push); **nada publicado en producción**. El estado al día, cómo se hizo cada
+medias; Etapas 7 y 8 pendientes. Todo en la rama `fase-2` (en GitHub desde el 26 oct 2026, sin
+despliegue); **nada publicado en producción**. El estado al día, cómo se hizo cada
 etapa y los pasos para publicar están en las secciones 0 y 10 del
 [PRD 02](agents/PRD/02-gestion-interna-y-pedidos-online.md).
 
