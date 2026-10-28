@@ -52,78 +52,76 @@ export const getFechasDisponibles = (
   return resultado;
 };
 
-// El cupo es por hora y por sucursal: "19:00", "19:15", "19:30" y "19:45"
-// comparten el bloque de las 19. Cuentan todos los pedidos del bloque,
-// también los completados (la misma regla que aplica create_order en la base).
-export const horaDe = (horario) => String(horario).split(":")[0].padStart(2, "0");
+// El cupo es por bloque y por sucursal. Los bloques duran
+// settings.bloqueMinutos (30 o 60, lo configura el administrador): con 30,
+// "19:00" y "19:15" comparten el bloque 19:00, y "19:30" ya es el siguiente.
+// Cuentan todos los pedidos del bloque, también los completados (la misma
+// regla que aplica create_order en la base con bloque_inicio()).
+export const minutosDe = (horario) => {
+  const [hh, mm] = String(horario).split(":").map(Number);
+  return hh * 60 + (mm || 0);
+};
 
-export const cupoDe = (settings, sucursal) => settings?.cupoPorHora?.[sucursal] ?? 4;
+export const hhmm = (minutos) =>
+  `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
 
-export const pedidosEnHora = (fecha, orders, horario, sucursal) =>
+export const bloqueDe = (horario, bloqueMinutos = 30) =>
+  hhmm(Math.floor(minutosDe(horario) / bloqueMinutos) * bloqueMinutos);
+
+export const cupoDe = (settings, sucursal) => settings?.cupoPorBloque?.[sucursal] ?? 2;
+
+export const pedidosEnBloque = (fecha, orders, horario, sucursal, bloqueMinutos = 30) =>
   orders.filter(
     (o) =>
       o.fecha === fecha &&
       o.sucursal === sucursal &&
-      horaDe(o.horario) === horaDe(horario)
+      bloqueDe(o.horario, bloqueMinutos) === bloqueDe(horario, bloqueMinutos)
   ).length;
 
-// Bloques de una hora a partir de las franjas: ["17:00", "17:15", "18:00"] → ["17", "18"].
-export const bloquesDe = (timeSlots) => [...new Set(timeSlots.map(horaDe))].sort();
+// Texto del bloque: "10:00 – 10:30" (o "10:00 – 11:00" con bloques de una
+// hora). Con las franjas, el último termina al cierre, como en
+// available_blocks: si empieza al cierre, queda solo "22:00".
+export const rangoBloque = (horario, bloqueMinutos = 30, timeSlots = []) => {
+  const inicio = minutosDe(bloqueDe(horario, bloqueMinutos));
+  const cierre = timeSlots.length ? Math.max(...timeSlots.map(minutosDe)) : Infinity;
+  const fin = Math.max(inicio, Math.min(inicio + bloqueMinutos, cierre));
+  return fin === inicio ? hhmm(inicio) : `${hhmm(inicio)} – ${hhmm(fin)}`;
+};
 
-// Hoy no se ofrecen franjas a menos de 30 minutos.
-export const franjaCercana = (fecha, h, ahora = new Date()) => {
+// Inicios de bloque a partir de las franjas: ["17:00", "17:15", "17:30"] → ["17:00", "17:30"].
+export const bloquesDe = (timeSlots, bloqueMinutos = 30) =>
+  [...new Set(timeSlots.map((h) => bloqueDe(h, bloqueMinutos)))].sort();
+
+// Hoy no se ofrecen franjas antes de que el pedido pueda estar listo
+// (ahora + minutos de preparación).
+export const franjaCercana = (fecha, h, ahora = new Date(), preparacion = 20) => {
   if (fecha !== isoLocal(ahora)) return false;
   const [hh, mm] = h.split(":").map(Number);
   const limite = new Date(ahora);
   limite.setHours(hh, mm, 0, 0);
-  return (limite - ahora) / 60000 < 30;
+  return (limite - ahora) / 60000 < preparacion;
 };
 
-export const getHorariosDisponibles = (
+// Franjas con cupo; la primera es la que se preselecciona.
+export const getHorariosDisponibles = ({
   fecha,
   orders,
   timeSlots,
-  cupoPorHora = 4,
+  cupo = 2,
   sucursal,
-  ahora = new Date()
-) =>
+  bloqueMinutos = 30,
+  preparacion = 20,
+  ahora = new Date(),
+}) =>
   timeSlots.filter(
-    (h) => !franjaCercana(fecha, h, ahora) && pedidosEnHora(fecha, orders, h, sucursal) < cupoPorHora
+    (h) =>
+      !franjaCercana(fecha, h, ahora, preparacion) &&
+      pedidosEnBloque(fecha, orders, h, sucursal, bloqueMinutos) < cupo
   );
-
-// Texto del bloque de una hora para el cliente: "20:00 – 21:00". Si el último
-// bloque no llega a la hora siguiente, termina en su última franja ("22:00").
-export const rangoBloque = (horario, timeSlots = []) => {
-  const h = horaDe(horario);
-  const inicio = `${h}:00`;
-  const siguiente = `${String(Number(h) + 1).padStart(2, "0")}:00`;
-  if (!timeSlots.length || timeSlots.some((s) => s >= siguiente)) return `${inicio} – ${siguiente}`;
-  const ultima = timeSlots.filter((s) => horaDe(s) === h).sort().at(-1) ?? inicio;
-  return ultima === inicio ? inicio : `${inicio} – ${ultima}`;
-};
-
-// El mismo bloque dentro de una frase: "entre 20:00 y 21:00" o "a las 22:00".
-export const textoBloque = (horario, timeSlots = []) => {
-  const [inicio, fin] = rangoBloque(horario, timeSlots).split(" – ");
-  return fin ? `entre ${inicio} y ${fin}` : `a las ${inicio}`;
-};
-
-// Bloques que ve el cliente a partir de available_slots: uno por hora, con la
-// primera franja como horario del pedido. Se ocultan los que empiezan en menos
-// de 30 minutos (create_order los rechazaría).
-export const bloquesCliente = (fecha, slots, ahora = new Date()) => {
-  const timeSlots = slots.map((s) => s.slot);
-  const bloques = [];
-  for (const s of [...slots].sort((a, b) => a.slot.localeCompare(b.slot))) {
-    if (bloques.some((b) => b.hora === horaDe(s.slot))) continue;
-    bloques.push({ hora: horaDe(s.slot), slot: s.slot, disponible: s.disponible, label: rangoBloque(s.slot, timeSlots) });
-  }
-  return bloques.filter((b) => !franjaCercana(fecha, b.slot, ahora));
-};
 
 // Propuesta cuando un bloque está lleno: las siguientes franjas con cupo del
 // mismo día, después de la elegida.
-export const proponerHorarios = (fecha, orders, timeSlots, cupoPorHora, sucursal, desde, cantidad = 3, ahora = new Date()) =>
-  getHorariosDisponibles(fecha, orders, timeSlots, cupoPorHora, sucursal, ahora)
+export const proponerHorarios = ({ desde, cantidad = 3, ...opciones }) =>
+  getHorariosDisponibles(opciones)
     .filter((h) => h > desde)
     .slice(0, cantidad);

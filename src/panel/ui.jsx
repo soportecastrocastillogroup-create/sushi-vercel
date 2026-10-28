@@ -18,6 +18,43 @@ export function Dialog({ title, onClose, children, wide = false }) {
   );
 }
 
+// Aviso que se puede cerrar con ✕. Queda cerrado durante la sesión mientras
+// su "firma" no cambie (p. ej. la cantidad de pedidos pendientes): si cambia,
+// vuelve a aparecer. tono: "aviso" (amarillo) o "peligro" (rojo).
+export function Aviso({ id, firma = "", tono = "aviso", titulo, children }) {
+  const clave = `sushiloncoche.aviso.${id}`;
+  const [cerradoCon, setCerradoCon] = useState(() => {
+    try {
+      return sessionStorage.getItem(clave);
+    } catch {
+      return null;
+    }
+  });
+  if (cerradoCon === String(firma)) return null;
+  const cerrar = () => {
+    try {
+      sessionStorage.setItem(clave, String(firma));
+    } catch {
+      // Sin sessionStorage el aviso se cierra solo en esta vista.
+    }
+    setCerradoCon(String(firma));
+  };
+  return (
+    <div className={`aviso aviso--${tono}`} role="alert">
+      <span className="aviso__icono" aria-hidden="true">
+        ⚠️
+      </span>
+      <div className="aviso__texto">
+        {titulo && <strong>{titulo}</strong>}
+        {children && <span>{children}</span>}
+      </div>
+      <button type="button" className="aviso__cerrar" aria-label="Cerrar aviso" onClick={cerrar}>
+        ✕
+      </button>
+    </div>
+  );
+}
+
 export function Tabs({ tabs, value, onChange }) {
   return (
     <div className="panel-tabs" role="tablist">

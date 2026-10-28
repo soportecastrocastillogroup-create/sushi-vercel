@@ -49,7 +49,7 @@ after(async () => {
 });
 
 describe("Etapa 4 · cuadratura de caja", () => {
-  let retiro, transf, delivery;
+  let retiro, debito, transf, delivery;
 
   test("anon no ve el resumen ni los cierres, y nadie los inserta directo", async () => {
     assert.equal((await anon.rpc("cash_summary", { p_branch_id: laPaz.id, p_fecha: FECHA })).error?.code, "42501");
@@ -60,15 +60,16 @@ describe("Etapa 4 · cuadratura de caja", () => {
   });
 
   test("el resumen trae pedidos, ventas por método y el pago al repartidor", async () => {
-    retiro = await crear("retiro", "pago_contra_entrega", 10000, "19:00");
+    retiro = await crear("retiro", "efectivo", 10000, "19:00");
+    debito = await crear("retiro", "debito", 5000, "19:30");
     transf = await crear("retiro", "transferencia", 8000, "19:15");
     delivery = await crear("delivery", "transferencia", 12000, "20:00");
     const { data: s, error } = await colab.rpc("cash_summary", { p_branch_id: laPaz.id, p_fecha: FECHA });
     assert.ifError(error);
-    assert.equal(s.pedidos, 3);
-    assert.equal(s.pedidos_pendientes, 3);
-    assert.equal(s.ventas_total, retiro.total + transf.total + delivery.total);
-    assert.deepEqual(s.ventas_por_metodo, { pago_contra_entrega: retiro.total, transferencia: transf.total + delivery.total });
+    assert.equal(s.pedidos, 4);
+    assert.equal(s.pedidos_pendientes, 4);
+    assert.equal(s.ventas_total, retiro.total + debito.total + transf.total + delivery.total);
+    assert.deepEqual(s.ventas_por_metodo, { efectivo: retiro.total, debito: debito.total, transferencia: transf.total + delivery.total });
     assert.deepEqual([s.deliveries, s.tarifa_repartidor, s.total_repartidor], [1, 2500, 2500]);
 
     const { data: otra } = await colab.rpc("cash_summary", { p_branch_id: loncoche.id, p_fecha: FECHA });
@@ -78,8 +79,8 @@ describe("Etapa 4 · cuadratura de caja", () => {
   test("el cierre guarda el resultado con la misma fórmula del frontend", async () => {
     const declarado = {
       fondo_inicial: 20000,
-      efectivo_contado: 21000,
-      tarjetas: 5000,
+      efectivo_contado: 26000,
+      tarjetas: 4000,
       transferencias: transf.total + delivery.total - 1000,
       otros_egresos: [{ detalle: " Hielo ", monto: 1500 }, { detalle: "vacío", monto: 0 }],
       observaciones: "Prueba",
@@ -89,11 +90,11 @@ describe("Etapa 4 · cuadratura de caja", () => {
     assert.ifError(error);
     const js = calcularCuadratura(sys, declarado);
     assert.deepEqual(
-      [c.efectivo_esperado, c.diferencia_efectivo, c.diferencia_transferencias, c.diferencia_total],
-      [js.esperado, js.difEfectivo, js.difTransferencias, js.difTotal]
+      [c.efectivo_esperado, c.diferencia_efectivo, c.diferencia_transferencias, c.diferencia_tarjetas, c.diferencia_total],
+      [js.esperado, js.difEfectivo, js.difTransferencias, js.difTarjetas, js.difTotal]
     );
-    // 20.000 + (10.000 − 5.000) − (2.500 + 1.500) = 21.000 → efectivo cuadra; faltan 1.000 en transferencias.
-    assert.deepEqual([c.efectivo_esperado, c.diferencia_efectivo, c.diferencia_transferencias], [21000, 0, -1000]);
+    // 20.000 + 10.000 − (2.500 + 1.500) = 26.000 → efectivo cuadra; faltan 1.000 en transferencias y 1.000 en débito.
+    assert.deepEqual([c.efectivo_esperado, c.diferencia_efectivo, c.diferencia_transferencias, c.diferencia_tarjetas], [26000, 0, -1000, -1000]);
     assert.deepEqual(c.otros_egresos, [{ detalle: "Hielo", monto: 1500 }]);
     assert.equal(c.cerrado_por_nombre, nombres["colab.pruebas@example.com"]);
     assert.equal(c.editado_por_nombre, null);
@@ -105,7 +106,7 @@ describe("Etapa 4 · cuadratura de caja", () => {
     const { data: c, error } = await admin.rpc("save_cash_closing", {
       p_branch_id: laPaz.id,
       p_fecha: FECHA,
-      p_declarado: { fondo_inicial: 20000, efectivo_contado: 21000, tarjetas: 5000, transferencias: transf.total + delivery.total, otros_egresos: [{ detalle: "Hielo", monto: 1500 }] },
+      p_declarado: { fondo_inicial: 20000, efectivo_contado: 26000, tarjetas: 5000, transferencias: transf.total + delivery.total, otros_egresos: [{ detalle: "Hielo", monto: 1500 }] },
     });
     assert.ifError(error);
     assert.deepEqual([c.tarifa_repartidor, c.total_repartidor], [2500, 2500]);

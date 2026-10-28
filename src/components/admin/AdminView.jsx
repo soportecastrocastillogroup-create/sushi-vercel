@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { fmt } from "../../utils/format.js";
 import { cartTotal } from "../../utils/cart.js";
-import { getFechasDisponibles, formatFecha, cupoDe, pedidosEnHora, isoLocal } from "../../utils/dates.js";
+import { getFechasDisponibles, formatFecha, cupoDe, pedidosEnBloque, rangoBloque, getHorariosDisponibles, isoLocal } from "../../utils/dates.js";
 import { emptyForm } from "../../utils/orders.js";
 import { cupoLleno } from "../../services/orders.js";
 import { ESTADOS, FUENTES, getPagos, NOMBRES_DIAS } from "../../constants/estados.js";
@@ -9,6 +9,7 @@ import { ESTADOS, FUENTES, getPagos, NOMBRES_DIAS } from "../../constants/estado
 import OrdersKanban from "./OrdersKanban.jsx";
 import ProductSelector from "../customer/ProductSelector.jsx";
 import { printComanda } from "../shared/Comanda.jsx";
+import { Aviso } from "../../panel/ui.jsx";
 
 // ── ADMIN VIEW ────────────────────────────────────────────────────────────────
 export default function AdminView({ orders, onAddOrder, onStatusChange, onDeleteOrder, onUpdateOrder, stock, onToggleStock, diasDesbloqueados=[], onToggleDia, menu, customizations, settings, branches, onRefresh }) {
@@ -24,8 +25,9 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
   const mfTot=cartTotal(mf.cart,mf.tipo,settings.costoDelivery);
   const mfPagos=getPagos(mf.tipo);
   const mfCupo=cupoDe(settings, mf.sucursal);
-  const mfOcupacion=h=>pedidosEnHora(mf.fecha, orders, h, mf.sucursal);
-  const mfHorario=mf.horario||settings.timeSlots.find(h=>mfOcupacion(h)<mfCupo)||settings.timeSlots[0]||"";
+  const mfOcupacion=h=>pedidosEnBloque(mf.fecha, orders, h, mf.sucursal, settings.bloqueMinutos);
+  // Preseleccionado: la primera franja con cupo desde que el pedido puede estar listo.
+  const mfHorario=mf.horario||getHorariosDisponibles({ fecha:mf.fecha, orders, timeSlots:settings.timeSlots, cupo:mfCupo, sucursal:mf.sucursal, bloqueMinutos:settings.bloqueMinutos, preparacion:settings.minutosPreparacion })[0]||settings.timeSlots.find(h=>mfOcupacion(h)<mfCupo)||settings.timeSlots[0]||"";
 
   // Desde el panel se puede pasar del cupo, con confirmación (PRD 02 · 5.2).
   const handleAddManual=async()=>{
@@ -35,7 +37,7 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
     const ocupados=mfOcupacion(mfHorario);
     let forzar=false;
     if(ocupados>=mfCupo){
-      if(!window.confirm(`El bloque de las ${mfHorario.split(":")[0]}:00 está lleno (${ocupados}/${mfCupo}). ¿Agregar igual?`)) return;
+      if(!window.confirm(`El bloque ${rangoBloque(mfHorario, settings.bloqueMinutos, settings.timeSlots)} está lleno (${ocupados}/${mfCupo}). ¿Agregar igual?`)) return;
       forzar=true;
     }
     const order={...mf,horario:mfHorario,items:mf.cart,estado:"abierto",timestamp:new Date().toISOString()};
@@ -46,7 +48,7 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
       } catch (error) {
         const lleno=cupoLleno(error);
         if(!lleno) throw error;
-        if(!window.confirm(`El bloque de las ${lleno.hora}:00 se llenó (${lleno.pedidos}/${lleno.cupo}). ¿Agregar igual?`)) return;
+        if(!window.confirm(`El bloque ${rangoBloque(lleno.bloque, settings.bloqueMinutos, settings.timeSlots)} se llenó (${lleno.pedidos}/${lleno.cupo}). ¿Agregar igual?`)) return;
         await onAddOrder(order,{ forzar:true });
       }
       setShowM(false); setMf(emptyForm("presencial", branches[0]));
@@ -64,18 +66,9 @@ export default function AdminView({ orders, onAddOrder, onStatusChange, onDelete
     <div style={{ padding:"20px 16px",maxWidth:1320,margin:"0 auto" }}>
       {/* Alerta 18 pedidos */}
       {alertaPedidos&&(
-        <div style={{ background:"#3A1A00",border:"1px solid #C06020",borderRadius:10,
-          padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:20 }}>⚠️</span>
-          <div>
-            <div style={{ color:"#F08040",fontSize:14,fontWeight:700 }}>
-              {activos} pedidos activos — revisar insumos
-            </div>
-            <div style={{ color:"#906040",fontSize:12,marginTop:2 }}>
-              Se alcanzó el límite de {settings.alertaPedidos} pedidos. Verificar stock en ambos locales.
-            </div>
-          </div>
-        </div>
+        <Aviso id="pedidos-activos" titulo={`${activos} pedidos activos — revisar insumos`}>
+          Se alcanzó el límite de {settings.alertaPedidos} pedidos. Verificar stock en ambos locales.
+        </Aviso>
       )}
       <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center" }}>
         <div style={{ flex:1 }}/>

@@ -3,7 +3,7 @@ import { fmt, timeAgo } from "../../utils/format.js";
 import { cambiosCosto } from "../../utils/cart.js";
 import { formatFecha } from "../../utils/dates.js";
 import { labelCompletado } from "../../utils/orders.js";
-import { ESTADOS, FUENTES, getPagos } from "../../constants/estados.js";
+import { ESTADOS, FUENTES, pagoLabel } from "../../constants/estados.js";
 
 import { buildComandaData, ComandaPreview, printComanda } from "./Comanda.jsx";
 
@@ -67,7 +67,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onEdit, set
         </div>}
         <div style={{ display:"flex",justifyContent:"space-between",marginTop:6 }}>
           <span style={{ color:"#8A8A92",fontSize:12 }}>
-            {getPagos(order.tipo).find(m=>m.id===order.metodoPago)?.label}
+            {pagoLabel(order.metodoPago)}
           </span>
           <span style={{ color:"#E53935",fontWeight:700,fontSize:14 }}>{fmt(tot)}</span>
         </div>

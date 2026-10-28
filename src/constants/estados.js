@@ -38,16 +38,18 @@ export const FUENTES = [
   { id: "llamada", label: "📞 Llamada" },
 ];
 
-export const getPagos = (tipo) =>
-  tipo === "delivery"
-    ? [{ id: "transferencia", label: "Transferencia bancaria" }]
-    : [
-        { id: "transferencia", label: "Transferencia bancaria" },
-        {
-          id: "pago_contra_entrega",
-          label: "Pago al retirar — tarjeta (crédito/débito) o efectivo",
-        },
-      ];
+// Medios de pago (reunión del 26 oct 2026): los tres en retiro y delivery.
+// "pago_contra_entrega" queda solo para mostrar pedidos anteriores.
+export const PAGOS = [
+  { id: "efectivo", label: "Efectivo" },
+  { id: "debito", label: "Débito" },
+  { id: "transferencia", label: "Transferencia bancaria" },
+];
+const PAGOS_ANTERIORES = [{ id: "pago_contra_entrega", label: "Pago al retirar (tarjeta o efectivo)" }];
+
+export const getPagos = () => PAGOS;
+
+export const pagoLabel = (id) => [...PAGOS, ...PAGOS_ANTERIORES].find((p) => p.id === id)?.label ?? id;
 
 export const NOMBRES_DIAS = [
   "Domingo",

@@ -1,22 +1,20 @@
 import { useState } from "react";
 import { fmt } from "../../utils/format.js";
-import { bloquesDe, cupoDe, formatFecha, horaDe, isoLocal, pedidosEnHora, sumarDias } from "../../utils/dates.js";
+import { bloqueDe, bloquesDe, cupoDe, formatFecha, hhmm, isoLocal, minutosDe, pedidosEnBloque, rangoBloque, sumarDias } from "../../utils/dates.js";
 import { labelCompletado } from "../../utils/orders.js";
 import { ESTADOS, FUENTES } from "../../constants/estados.js";
 import { buildComandaData } from "../shared/Comanda.jsx";
 import OrderCard from "../shared/OrderCard.jsx";
 import { Dialog } from "../../panel/ui.jsx";
 
-// Franja de destino al mover un pedido a otro bloque: conserva los minutos si
-// esa franja existe ("20:15" → "21:15"); si no, la primera franja del bloque.
-const franjaEnBloque = (timeSlots, bloque, horario) => {
-  const mismaHora = `${bloque}:${String(horario).split(":")[1] ?? "00"}`;
-  if (timeSlots.includes(mismaHora)) return mismaHora;
-  return timeSlots.find((h) => horaDe(h) === bloque) ?? `${bloque}:00`;
-};
+// Hora de destino al mover un pedido a otro bloque: conserva los minutos
+// dentro del bloque ("20:10" → "21:10", o "20:40" → "21:40").
+const horaEnBloque = (bloque, horario, bloqueMinutos) =>
+  hhmm(minutosDe(bloque) + (minutosDe(horario) - minutosDe(bloqueDe(horario, bloqueMinutos))));
 
 // ── KANBAN DE PEDIDOS (PRD 02 · Etapa 2) ─────────────────────────────────────
-// Un día y una sucursal; una columna por bloque de una hora con su ocupación.
+// Un día y una sucursal; una columna por bloque (30 o 60 minutos, según la
+// configuración) con su ocupación.
 export default function OrdersKanban({ orders, settings, branches, onStatusChange, onUpdateOrder, onDeleteOrder, onEdit }) {
   const [sucursal, setSucursal] = useState(branches[0]);
   const [fecha, setFecha] = useState(() => isoLocal());
@@ -25,8 +23,11 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
   const [destino, setDestino] = useState(null);
 
   const cupo = cupoDe(settings, sucursal);
+  const min = settings.bloqueMinutos ?? 30;
+  const bloqueDeOrden = (o) => bloqueDe(o.horario, min);
+  const rango = (h) => rangoBloque(h, min, settings.timeSlots);
   const delDia = orders.filter((o) => o.fecha === fecha && o.sucursal === sucursal);
-  const bloques = [...new Set([...bloquesDe(settings.timeSlots), ...delDia.map((o) => horaDe(o.horario))])].sort();
+  const bloques = [...new Set([...bloquesDe(settings.timeSlots, min), ...delDia.map(bloqueDeOrden)])].sort();
   const detalle = orders.find((o) => o.id === detalleId);
 
   const stats = {
@@ -37,16 +38,16 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
   };
 
   const mover = (order, bloque) => {
-    if (horaDe(order.horario) === bloque) return;
-    const ocupados = pedidosEnHora(order.fecha, orders, `${bloque}:00`, order.sucursal);
-    if (ocupados >= cupo && !window.confirm(`El bloque de las ${bloque}:00 está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
-    onUpdateOrder(order.id, { ...order, horario: franjaEnBloque(settings.timeSlots, bloque, order.horario) });
+    if (bloqueDeOrden(order) === bloque) return;
+    const ocupados = pedidosEnBloque(order.fecha, orders, bloque, order.sucursal, min);
+    if (ocupados >= cupo && !window.confirm(`El bloque ${rango(bloque)} está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
+    onUpdateOrder(order.id, { ...order, horario: horaEnBloque(bloque, order.horario, min) });
   };
 
   const cambiarHora = (order, horario) => {
-    if (horaDe(horario) !== horaDe(order.horario)) {
-      const ocupados = pedidosEnHora(order.fecha, orders, horario, order.sucursal);
-      if (ocupados >= cupo && !window.confirm(`El bloque de las ${horaDe(horario)}:00 está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
+    if (bloqueDe(horario, min) !== bloqueDeOrden(order)) {
+      const ocupados = pedidosEnBloque(order.fecha, orders, horario, order.sucursal, min);
+      if (ocupados >= cupo && !window.confirm(`El bloque ${rango(horario)} está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
     }
     onUpdateOrder(order.id, { ...order, horario });
   };
@@ -75,7 +76,9 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
             Hoy
           </button>
         )}
-        <span className="kanban__cupo">Cupo: {cupo} por hora</span>
+        <span className="kanban__cupo">
+          Cupo: {cupo} por bloque de {min} min
+        </span>
       </div>
 
       <div className="kanban__stats">
@@ -95,7 +98,7 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
       <div className="kanban__cols">
         {bloques.map((b) => {
           const pedidos = delDia
-            .filter((o) => horaDe(o.horario) === b)
+            .filter((o) => bloqueDeOrden(o) === b)
             .sort((x, y) => x.horario.localeCompare(y.horario) || new Date(x.timestamp) - new Date(y.timestamp));
           const estadoCol = pedidos.length > cupo ? "is-over" : pedidos.length === cupo ? "is-full" : "";
           return (
@@ -117,7 +120,7 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
               }}
             >
               <header className="kanban__col-head">
-                <h3>{b}:00</h3>
+                <h3>{rango(b)}</h3>
                 <span className="kanban__occ">
                   {pedidos.length} / {cupo}
                   {estadoCol && <em>{estadoCol === "is-over" ? " · sobrecupo" : " · lleno"}</em>}

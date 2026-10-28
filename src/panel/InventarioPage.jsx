@@ -12,7 +12,7 @@ import {
   saveMovement,
 } from "../services/inventory.js";
 import { formatFecha, isoLocal, sumarDias } from "../utils/dates.js";
-import { Dialog, Tabs, Toggle } from "./ui.jsx";
+import { Aviso, Dialog, Tabs, Toggle } from "./ui.jsx";
 import { useFlash } from "./useFlash.jsx";
 
 const nf = new Intl.NumberFormat("es-CL", { maximumFractionDigits: 3 });
@@ -95,6 +95,9 @@ function Planilla({ config, branchId, setBranchId, flash, onChanged, goToConfig,
   };
 
   const criticos = (rows ?? []).filter((r) => r.critico && r.semaforo === "rojo");
+  // Ventana flotante para registrar: el insumo y el tipo elegidos.
+  const registroRow = abierto && rows?.find((r) => r.item_id === abierto.itemId);
+  const registro = registroRow ? { row: registroRow, tipo: abierto.tipo } : null;
 
   return (
     <div className="inv">
@@ -118,10 +121,9 @@ function Planilla({ config, branchId, setBranchId, flash, onChanged, goToConfig,
       {!rows && !error && <p className="panel-muted">Cargando planilla…</p>}
 
       {criticos.length > 0 && (
-        <div className="inv-alert" role="alert">
-          <strong>⚠️ Insumos críticos bajo el mínimo</strong>
-          <span>{criticos.map((r) => `${r.nombre} (${cant(r.actual)} ${r.unidad}, mín. ${cant(r.stock_minimo)})`).join(" · ")}</span>
-        </div>
+        <Aviso id={`inv-criticos-${branchId}`} firma={criticos.map((r) => r.item_id).join(",")} tono="peligro" titulo="Insumos críticos bajo el mínimo">
+          {criticos.map((r) => `${r.nombre} (${cant(r.actual)} ${r.unidad}, mín. ${cant(r.stock_minimo)})`).join(" · ")}
+        </Aviso>
       )}
 
       {rows?.length === 0 && (
@@ -137,101 +139,118 @@ function Planilla({ config, branchId, setBranchId, flash, onChanged, goToConfig,
         </div>
       )}
 
-      <div className="inv-list">
-        {rows?.map((r) => {
-          const open = abierto?.itemId === r.item_id ? abierto.tipo : null;
-          return (
-            <article key={r.item_id} className={`inv-row inv-row--${r.semaforo}`}>
-              <div className="inv-row__head">
-                <div>
-                  <h3>
-                    {r.nombre}
-                    {r.critico && <span className="inv-tag">Crítico</span>}
-                  </h3>
-                  <Semaforo value={r.semaforo} />
-                </div>
-                <div className="inv-row__stock">
-                  <strong>{cant(r.actual)}</strong>
-                  <span>
-                    {r.unidad} · mín. {cant(r.stock_minimo)}
-                  </span>
-                </div>
-              </div>
-              <dl className="inv-row__day">
-                <div>
-                  <dt>Inicio</dt>
-                  <dd>{cant(r.inicio)}</dd>
-                </div>
-                <div>
-                  <dt>Entró</dt>
-                  <dd className="is-in">{conSigno(r.ingresos)}</dd>
-                </div>
-                <div>
-                  <dt>Uso</dt>
-                  <dd className="is-out">{conSigno(-r.usos)}</dd>
-                </div>
-                <div>
-                  <dt>Merma</dt>
-                  <dd className="is-out">{conSigno(-r.mermas)}</dd>
-                </div>
-                {Number(r.ajustes) !== 0 && (
-                  <div>
-                    <dt>Ajuste</dt>
-                    <dd>{conSigno(r.ajustes)}</dd>
-                  </div>
-                )}
-              </dl>
-              <div className="inv-row__actions">
-                {Object.entries(TIPOS).map(([tipo, t]) => (
-                  <button
-                    key={tipo}
-                    type="button"
-                    className={`inv-btn inv-btn--${tipo} ${open === tipo ? "is-active" : ""}`}
-                    onClick={() => abrir(r.item_id, tipo)}
-                  >
-                    {tipo === "ingreso" ? "+ " : tipo === "ajuste" ? "" : "− "}
-                    {tipo === "ajuste" ? "Conteo" : t.label}
-                  </button>
-                ))}
-              </div>
-              {open && (
-                <form className="inv-quick" onSubmit={(e) => guardar(e, r)}>
-                  <label className="field">
-                    <span>{open === "ajuste" ? `Stock contado (${r.unidad})` : `Cantidad (${r.unidad})`}</span>
-                    <input
-                      autoFocus
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      min={open === "ajuste" ? undefined : "0"}
-                      value={form.cantidad}
-                      onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
-                      required
-                    />
-                    {open === "ajuste" && form.cantidad !== "" && (
-                      <small className="panel-muted">
-                        Diferencia con el sistema: {conSigno(Number(form.cantidad) - Number(r.actual))} {r.unidad}
-                      </small>
-                    )}
-                  </label>
-                  <label className="field">
-                    <span>Observación (opcional)</span>
-                    <input value={form.observacion} onChange={(e) => setForm({ ...form, observacion: e.target.value })} />
-                  </label>
-                  <div className="inv-quick__actions">
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setAbierto(null)}>
-                      Cancelar
-                    </button>
-                    <button type="submit" className="btn btn--primary btn--sm" disabled={busy}>
-                      {busy ? "Guardando…" : `Registrar ${open === "ajuste" ? "conteo" : TIPOS[open].label.toLowerCase()}`}
-                    </button>
-                  </div>
-                </form>
+      {rows?.length > 0 && (
+        <div className="inv-table-wrap">
+          <table className="inv-table">
+            <thead>
+              <tr>
+                <th>Insumo</th>
+                <th>Estado</th>
+                <th className="num">Inicio</th>
+                <th className="num">Entró</th>
+                <th className="num">Uso</th>
+                <th className="num">Merma</th>
+                <th className="num">Ajuste</th>
+                <th className="num">Stock</th>
+                <th>Registrar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const open = abierto?.itemId === r.item_id ? abierto.tipo : null;
+                return (
+                  <tr key={r.item_id} className={`inv-tr inv-tr--${r.semaforo}`}>
+                      <td className="inv-td-name">
+                        {r.nombre}
+                        {r.critico && <span className="inv-tag">Crítico</span>}
+                      </td>
+                      <td data-label="Estado">
+                        <Semaforo value={r.semaforo} />
+                      </td>
+                      <td className="num" data-label="Inicio">
+                        {cant(r.inicio)}
+                      </td>
+                      <td className="num is-in" data-label="Entró">
+                        {conSigno(r.ingresos)}
+                      </td>
+                      <td className="num is-out" data-label="Uso">
+                        {conSigno(-r.usos)}
+                      </td>
+                      <td className="num is-out" data-label="Merma">
+                        {conSigno(-r.mermas)}
+                      </td>
+                      <td className="num" data-label="Ajuste">
+                        {conSigno(r.ajustes)}
+                      </td>
+                      <td className="num inv-td-stock" data-label="Stock">
+                        <strong>{cant(r.actual)}</strong> {r.unidad}
+                        <small>mín. {cant(r.stock_minimo)}</small>
+                      </td>
+                      <td className="inv-td-actions">
+                        {Object.entries(TIPOS).map(([tipo, t]) => (
+                          <button
+                            key={tipo}
+                            type="button"
+                            className={`inv-btn inv-btn--${tipo} ${open === tipo ? "is-active" : ""}`}
+                            onClick={() => abrir(r.item_id, tipo)}
+                          >
+                            {tipo === "ingreso" ? "+ " : tipo === "ajuste" ? "" : "− "}
+                            {tipo === "ajuste" ? "Conteo" : t.label}
+                          </button>
+                        ))}
+                      </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {registro && (
+        <Dialog
+          title={`${registro.tipo === "ajuste" ? "Conteo" : TIPOS[registro.tipo].label} · ${registro.row.nombre}`}
+          onClose={() => setAbierto(null)}
+        >
+          <form className="inv-registro" onSubmit={(e) => guardar(e, registro.row)}>
+            <p className="inv-registro__stock">
+              Stock actual: <strong>{cant(registro.row.actual)} {registro.row.unidad}</strong>
+              <span className="panel-muted"> · mín. {cant(registro.row.stock_minimo)}</span>
+            </p>
+            <label className="field">
+              <span>{registro.tipo === "ajuste" ? `Stock contado (${registro.row.unidad})` : `Cantidad (${registro.row.unidad})`}</span>
+              <input
+                autoFocus
+                className="inv-registro__cantidad"
+                type="number"
+                inputMode="decimal"
+                step="any"
+                min={registro.tipo === "ajuste" ? undefined : "0"}
+                value={form.cantidad}
+                onChange={(e) => setForm({ ...form, cantidad: e.target.value })}
+                required
+              />
+              {registro.tipo === "ajuste" && form.cantidad !== "" && (
+                <small className="panel-muted">
+                  Diferencia con el sistema: {conSigno(Number(form.cantidad) - Number(registro.row.actual))} {registro.row.unidad}
+                </small>
               )}
-            </article>
-          );
-        })}
-      </div>
+            </label>
+            <label className="field">
+              <span>Observación (opcional)</span>
+              <input value={form.observacion} onChange={(e) => setForm({ ...form, observacion: e.target.value })} />
+            </label>
+            <div className="panel-dialog__actions">
+              <button type="button" className="btn btn--ghost" onClick={() => setAbierto(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={busy}>
+                {busy ? "Guardando…" : `Registrar ${registro.tipo === "ajuste" ? "conteo" : TIPOS[registro.tipo].label.toLowerCase()}`}
+              </button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </div>
   );
 }

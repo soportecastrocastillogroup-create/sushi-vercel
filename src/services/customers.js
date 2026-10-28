@@ -51,9 +51,10 @@ export const fetchMyOrders = async () =>
       .limit(30)
   );
 
-// Cupos por franja de una sucursal y fecha: [{ slot, hora, pedidos, cupo, disponible }].
-export const fetchAvailableSlots = async (sucursal, fecha) =>
-  must(await supabase.rpc("available_slots", { p_sucursal: sucursal, p_fecha: fecha }));
+// Bloques de una sucursal y fecha con su cupo y la hora que tendría el pedido:
+// [{ bloque, fin, horario, pedidos, cupo, disponible }]. Hoy solo los que no han pasado.
+export const fetchAvailableBlocks = async (sucursal, fecha) =>
+  must(await supabase.rpc("available_blocks", { p_sucursal: sucursal, p_fecha: fecha }));
 
 export const fetchUnlockedDates = async () => must(await supabase.from("unlocked_dates").select("date")).map((d) => d.date);
 

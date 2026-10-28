@@ -252,17 +252,17 @@ function LocalesTab({ data, reload, flash }) {
             <input value={b.serviciosText} onChange={(e) => edit(b.id, { serviciosText: e.target.value })} placeholder="Retiro en local, Delivery" />
           </label>
           <label className="field">
-            <span>Pedidos por hora</span>
+            <span>Pedidos por bloque</span>
             <input
               type="number"
               min="1"
               step="1"
-              value={b.cupo_por_hora}
-              onChange={(e) => edit(b.id, { cupo_por_hora: e.target.value })}
+              value={b.cupo_por_bloque}
+              onChange={(e) => edit(b.id, { cupo_por_bloque: e.target.value })}
             />
             <small className="panel-muted">
-              Cuántos pedidos caben en cada bloque de una hora (17:00 a 17:59, 18:00 a 18:59…) en este local. Los horarios llenos se
-              bloquean al tomar pedidos.
+              Cuántos pedidos caben en cada bloque (por ejemplo, de 18:00 a 18:30) en este local. La duración del bloque se configura en
+              Datos del negocio. Los bloques llenos se bloquean al tomar pedidos.
             </small>
           </label>
           <label className="field">
@@ -370,6 +370,21 @@ function NegocioTab({ data, reload, flash }) {
             <input type="number" min="0" value={settings.max_cambios} onChange={num("max_cambios")} />
           </label>
         </div>
+        <div className="editor__row">
+          <label className="field">
+            <span>Duración de cada bloque</span>
+            <select value={settings.bloque_minutos} onChange={num("bloque_minutos")}>
+              <option value={30}>30 minutos</option>
+              <option value={60}>1 hora</option>
+            </select>
+            <small className="panel-muted">Las columnas del kanban y los horarios que elige el cliente. El cupo por bloque se configura en cada local.</small>
+          </label>
+          <label className="field">
+            <span>Tiempo de preparación (min)</span>
+            <input type="number" min="5" max="120" step="5" value={settings.minutos_preparacion} onChange={num("minutos_preparacion")} />
+            <small className="panel-muted">Un pedido online hecho ahora queda para dentro de este tiempo (la hora aproximada que ve el cliente).</small>
+          </label>
+        </div>
 
         <fieldset className="field">
           <legend>Días cerrados por defecto</legend>
@@ -410,8 +425,8 @@ function NegocioTab({ data, reload, flash }) {
             </button>
           </div>
           <small className="panel-muted">
-            Son las horas que se ofrecen al tomar pedidos y las columnas del kanban. El cupo por hora se configura en cada local.
-            También puedes agregar o quitar una franja suelta.
+            Son las horas de trabajo: desde la primera hasta la última se arman los bloques y se toman pedidos. Para trabajar más
+            horas, genera un rango más amplio. También puedes agregar o quitar una franja suelta.
           </small>
           <div className="slot-chips">
             {slots.map((s) => (

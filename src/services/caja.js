@@ -21,7 +21,7 @@ export const fetchRecentClosings = async (branchId, limit = 10) =>
   must(
     await supabase
       .from("cash_closings")
-      .select("fecha, diferencia_total, cerrado_por_nombre, editado_por_nombre")
+      .select("fecha, pedidos, ventas_total, diferencia_efectivo, diferencia_tarjetas, diferencia_transferencias, diferencia_total, cerrado_por_nombre, editado_por_nombre")
       .eq("branch_id", branchId)
       .order("fecha", { ascending: false })
       .limit(limit)

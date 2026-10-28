@@ -3,7 +3,7 @@ import { fmt } from "../../utils/format.js";
 import { cambiosCosto } from "../../utils/cart.js";
 import { formatFecha, isoLocal } from "../../utils/dates.js";
 import { labelCompletado } from "../../utils/orders.js";
-import { ESTADOS, getPagos } from "../../constants/estados.js";
+import { ESTADOS, pagoLabel } from "../../constants/estados.js";
 
 // ── REPORTES VIEW ─────────────────────────────────────────────────────────────
 export default function ReportesView({ orders, settings, branches }) {
@@ -28,7 +28,7 @@ export default function ReportesView({ orders, settings, branches }) {
       const tot = o.items.reduce((s,i)=>s+(i.precio+cambiosCosto(i.cambios))*i.qty,0)+(o.tipo==="delivery"?settings.costoDelivery:0);
       const productos = o.items.map(i=>`${i.qty}x ${i.nombre}`).join(" | ");
       const hora = new Date(o.timestamp).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
-      const pago = getPagos(o.tipo).find(m=>m.id===o.metodoPago)?.label||o.metodoPago;
+      const pago = pagoLabel(o.metodoPago);
       const estado = o.estado==="completado"?labelCompletado(o.tipo):ESTADOS[o.estado]?.label||o.estado;
       return [o.orderId,o.fecha||"",hora,o.sucursal,o.cliente.nombre,o.cliente.telefono,
         o.tipo,o.horario,`"${productos}"`,tot,pago,estado].join(",");
@@ -111,7 +111,7 @@ export default function ReportesView({ orders, settings, branches }) {
             <tbody>
               {filtered.map(o=>{
                 const tot = o.items.reduce((s,i)=>s+(i.precio+cambiosCosto(i.cambios))*i.qty,0)+(o.tipo==="delivery"?settings.costoDelivery:0);
-                const pago = getPagos(o.tipo).find(m=>m.id===o.metodoPago)?.label||o.metodoPago;
+                const pago = pagoLabel(o.metodoPago);
                 const estadoLabel = o.estado==="completado"?labelCompletado(o.tipo):ESTADOS[o.estado]?.label||o.estado;
                 const estadoColor = ESTADOS[o.estado]?.color||"#6B7280";
                 return (

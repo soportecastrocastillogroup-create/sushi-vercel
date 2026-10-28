@@ -4,16 +4,22 @@ import { fetchBranchesCaja, fetchCashSummary, fetchClosing, fetchRecentClosings,
 import { calcularCuadratura } from "../utils/caja.js";
 import { fmt } from "../utils/format.js";
 import { formatFecha, isoLocal, sumarDias } from "../utils/dates.js";
-import { getPagos } from "../constants/estados.js";
+import { PAGOS, pagoLabel } from "../constants/estados.js";
+import { Aviso, Tabs } from "./ui.jsx";
 import { useFlash } from "./useFlash.jsx";
 
-const METODOS = Object.fromEntries(getPagos("retiro").map((p) => [p.id, p.id === "pago_contra_entrega" ? "Pago al retirar" : p.label]));
+// Cuadratura de caja en una pantalla: (1) fondo y gastos en efectivo, (2) contar
+// cada medio de pago al lado de lo que debería haber, y abajo una barra fija
+// con el resultado y el botón de cerrar.
+// Las cifras las calcula la base (cash_summary / save_cash_closing) con la
+// misma fórmula que utils/caja.js.
 
 const emptyDeclarado = () => ({
   fondo_inicial: "",
   efectivo_contado: "",
   tarjetas: "",
   transferencias: "",
+  pago_repartidor: "",
   otros_egresos: [],
   observaciones: "",
 });
@@ -23,34 +29,466 @@ const fromClosing = (c) => ({
   efectivo_contado: c.efectivo_contado,
   tarjetas: c.tarjetas,
   transferencias: c.transferencias,
+  pago_repartidor: c.total_repartidor,
   otros_egresos: c.otros_egresos ?? [],
   observaciones: c.observaciones ?? "",
 });
 
-const fechaHora = (ts) =>
-  new Date(ts).toLocaleString("es-CL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const hora = (ts) => new Date(ts).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const vacio = (v) => v === "" || v === null || v === undefined;
 
-function Diferencia({ label, value, strong = false }) {
-  const estado = value === 0 ? "ok" : "bad";
+// "Cuadra", "Falta $1.000" o "Sobra $500".
+function Resultado({ value, grande = false }) {
+  const estado = value === 0 ? "ok" : value < 0 ? "falta" : "sobra";
   return (
-    <div className={`caja-dif caja-dif--${estado}${strong ? " caja-dif--total" : ""}`}>
-      <span>{label}</span>
-      <strong>
-        {value > 0 ? "+" : value < 0 ? "−" : ""}
-        {fmt(Math.abs(value))}
-      </strong>
-      <small>{value === 0 ? "Cuadra" : value > 0 ? "Sobra" : "Falta"}</small>
-    </div>
+    <span className={`caja-res caja-res--${estado}${grande ? " caja-res--grande" : ""}`}>
+      {value === 0 ? "✓ Cuadra" : `${value < 0 ? "Falta" : "Sobra"} ${fmt(Math.abs(value))}`}
+    </span>
   );
 }
 
-function Money({ label, value, onChange, hint }) {
+// Monto en pesos. Es texto, no "number": en Chile el punto separa los miles y
+// un campo numérico leía "10.000" como 10. Se guardan solo los dígitos y se
+// muestra con puntos ("10.000").
+const miles = new Intl.NumberFormat("es-CL");
+function Monto({ value, onChange, label, autoFocus }) {
+  const digitos = String(value ?? "").replace(/\D/g, "");
   return (
-    <label className="field">
-      <span>{label}</span>
-      <input type="number" min="0" step="1" inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />
-      {hint && <small className="panel-muted">{hint}</small>}
-    </label>
+    <input
+      className="caja-monto"
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="$0"
+      aria-label={label}
+      autoFocus={autoFocus}
+      value={digitos === "" ? "" : `$${miles.format(Number(digitos))}`}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))}
+    />
+  );
+}
+
+// Una fila del conteo: lo que debería haber, lo contado y la diferencia.
+function Fila({ titulo, ayuda, deberia, detalle, value, onChange, dif }) {
+  return (
+    <tr>
+      <td>
+        <strong>{titulo}</strong>
+        <small>{ayuda}</small>
+      </td>
+      <td className="num" data-label="Debería haber">
+        <strong>{fmt(deberia)}</strong>
+        {detalle && <small>{detalle}</small>}
+      </td>
+      <td className="num" data-label="Contaste">
+        <Monto value={value} onChange={onChange} label={`${titulo}: lo que contaste`} />
+      </td>
+      <td className="num" data-label="Resultado">
+        {vacio(value) ? <span className="caja-res caja-res--pend">—</span> : <Resultado value={dif} />}
+      </td>
+    </tr>
+  );
+}
+
+// Panel lateral: los pedidos del día, del más reciente al más antiguo, con
+// cuánto y cómo pagaron. Los filtros por medio de pago ayudan a contar.
+function PedidosDelDia({ pedidos }) {
+  const [filtro, setFiltro] = useState("todos");
+  const orden = (m) => {
+    const i = PAGOS.findIndex((p) => p.id === m);
+    return i < 0 ? PAGOS.length : i;
+  };
+  const metodos = [...new Set(pedidos.map((o) => o.metodoPago))].sort((a, b) => orden(a) - orden(b));
+  const total = (lista) => lista.reduce((n, o) => n + (Number(o.total) || 0), 0);
+  const visibles = filtro === "todos" ? pedidos : pedidos.filter((o) => o.metodoPago === filtro);
+  const corto = (m) => pagoLabel(m).replace(" bancaria", "").replace("Pago al retirar (tarjeta o efectivo)", "Al retirar");
+  return (
+    <aside className="panel-card caja-lado">
+      <h2 className="caja-paso__titulo">Pedidos del día</h2>
+      <p className="panel-muted caja-paso__ayuda">El más reciente arriba. Filtra por medio de pago para contar.</p>
+      {pedidos.length === 0 ? (
+        <p className="panel-muted">No hay pedidos este día.</p>
+      ) : (
+        <>
+          <div className="caja-lado__filtros" role="group" aria-label="Filtrar por medio de pago">
+            {[["todos", "Todos", pedidos], ...metodos.map((m) => [m, corto(m), pedidos.filter((o) => o.metodoPago === m)])].map(([id, label, lista]) => (
+              <button key={id} type="button" className={filtro === id ? "is-active" : ""} aria-pressed={filtro === id} onClick={() => setFiltro(id)}>
+                {label} <small>{fmt(total(lista))}</small>
+              </button>
+            ))}
+          </div>
+          <ul className="caja-lado__lista">
+            {visibles.map((o) => (
+              <li key={o.id}>
+                <div className="caja-lado__fila">
+                  <span className="caja-lado__hora" title="Hora en que se tomó el pedido">
+                    {o.timestamp ? hora(o.timestamp) : o.horario}
+                  </span>
+                  <b>{o.orderId}</b>
+                  <span className="caja-lado__cli">{o.cliente.nombre || "Sin nombre"}</span>
+                  <strong>{fmt(o.total)}</strong>
+                </div>
+                <div className="caja-lado__fila caja-lado__fila--meta">
+                  <span className={`caja-pago caja-pago--${o.metodoPago}`}>{corto(o.metodoPago)}</span>
+                  <span className="panel-muted">
+                    {o.tipo === "delivery" ? "Delivery" : "Retiro"} para las {o.horario}
+                    {o.estado !== "completado" && " · sin completar"}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="caja-lado__total">
+            {visibles.length} {visibles.length === 1 ? "pedido" : "pedidos"} · <strong>{fmt(total(visibles))}</strong>
+          </p>
+        </>
+      )}
+    </aside>
+  );
+}
+
+// ── Cerrar caja ───────────────────────────────────────────────────────────────
+function Cierre({ branch, fecha, pedidosDia, flash }) {
+  const [sistema, setSistema] = useState(null);
+  const [cierre, setCierre] = useState(null);
+  const [declarado, setDeclarado] = useState(emptyDeclarado);
+  const [editando, setEditando] = useState(false);
+  const [version, setVersion] = useState(0);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchCashSummary(branch.id, fecha), fetchClosing(branch.id, fecha)])
+      .then(([s, c]) => {
+        if (cancelled) return;
+        setSistema(s);
+        setCierre(c);
+        // El pago al repartidor parte con el calculado (deliveries × tarifa) y se puede cambiar.
+        setDeclarado(c ? fromClosing(c) : { ...emptyDeclarado(), pago_repartidor: s.total_repartidor });
+        setEditando(false);
+        setError("");
+      })
+      .catch((e) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [branch.id, fecha, version]);
+
+  if (error) return <p className="flash flash--error">{error}</p>;
+  if (!sistema) return <p className="panel-muted">Cargando…</p>;
+
+  const r = calcularCuadratura(sistema, declarado);
+  const completo = !vacio(declarado.efectivo_contado) && !vacio(declarado.tarjetas) && !vacio(declarado.transferencias);
+  const set = (k) => (v) => setDeclarado((d) => ({ ...d, [k]: v }));
+  const setEgreso = (i, patch) =>
+    setDeclarado((d) => ({ ...d, otros_egresos: d.otros_egresos.map((e, j) => (j === i ? { ...e, ...patch } : e)) }));
+
+  const guardar = async (e) => {
+    e.preventDefault();
+    if (!completo) return;
+    if (sistema.pedidos_pendientes > 0 && !cierre) {
+      const ok = window.confirm(`Hay ${sistema.pedidos_pendientes} pedido(s) sin completar en ${branch.name}. ¿Cerrar la caja igual?`);
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      const body = {
+        ...declarado,
+        otros_egresos: declarado.otros_egresos
+          .filter((x) => Number(x.monto) > 0)
+          .map((x) => ({ detalle: x.detalle, monto: Math.round(Number(x.monto)) })),
+      };
+      for (const k of ["fondo_inicial", "efectivo_contado", "tarjetas", "transferencias", "pago_repartidor"]) body[k] = Math.round(Number(body[k]) || 0);
+      await saveClosing(branch.id, fecha, body);
+      flash(cierre ? "Cierre actualizado." : "Caja cerrada.");
+      setVersion((v) => v + 1);
+    } catch (err) {
+      flash(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ventas = (
+    <section className="caja-ventas">
+      <div className="caja-ventas__fila">
+        <span>
+          Vendido <strong>{fmt(sistema.ventas_total)}</strong> en {sistema.pedidos} {sistema.pedidos === 1 ? "pedido" : "pedidos"}
+        </span>
+        {Object.entries(sistema.ventas_por_metodo).map(([m, total]) => (
+          <span key={m} className="caja-ventas__metodo">
+            {pagoLabel(m).replace(" bancaria", "")} <strong>{fmt(total)}</strong>
+          </span>
+        ))}
+      </div>
+      {sistema.pedidos_pendientes > 0 && (
+        <Aviso id={`caja-pendientes-${branch.id}-${fecha}`} firma={sistema.pedidos_pendientes}>
+          {sistema.pedidos_pendientes} {sistema.pedidos_pendientes === 1 ? "pedido sigue" : "pedidos siguen"} sin completar. Revísalos antes de cerrar.
+        </Aviso>
+      )}
+    </section>
+  );
+
+  // Caja ya cerrada: resumen claro, con la opción de editar.
+  if (cierre && !editando) {
+    const rc = calcularCuadratura({ ventas_por_metodo: cierre.ventas_por_metodo, total_repartidor: cierre.total_repartidor }, fromClosing(cierre));
+    return (
+      <div className="caja-grid caja-grid--cerrada">
+        <section className="panel-card caja-cerrada">
+          <div className="caja-cerrada__head">
+            <div>
+              <h2>Caja cerrada</h2>
+              <p className="panel-muted">
+                Por {cierre.cerrado_por_nombre || "—"} a las {hora(cierre.cerrado_at)}
+                {cierre.editado_por_nombre && ` · editada por ${cierre.editado_por_nombre} a las ${hora(cierre.updated_at)}`}
+              </p>
+            </div>
+            <Resultado value={cierre.diferencia_total} grande />
+          </div>
+          <table className="caja-tabla">
+            <thead>
+              <tr>
+                <th>Medio</th>
+                <th className="num">Debería haber</th>
+                <th className="num">Contaron</th>
+                <th className="num">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Efectivo en caja", rc.esperado, cierre.efectivo_contado, rc.difEfectivo],
+                ["Débito (POS)", rc.ventasDebito, cierre.tarjetas, rc.difTarjetas],
+                ["Transferencias", rc.ventasTransferencia, cierre.transferencias, rc.difTransferencias],
+              ].map(([medio, deberia, conto, dif]) => (
+                <tr key={medio}>
+                  <td>{medio}</td>
+                  <td className="num">{fmt(deberia)}</td>
+                  <td className="num">{fmt(conto)}</td>
+                  <td className="num">
+                    <Resultado value={dif} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="panel-muted caja-cerrada__nota">
+            Fondo inicial {fmt(cierre.fondo_inicial)} · repartidor {fmt(rc.repartidor)}
+            {rc.otrosEgresos > 0 && ` · otros gastos ${fmt(rc.otrosEgresos)}`}
+            {cierre.observaciones && ` · “${cierre.observaciones}”`}
+          </p>
+          {cierre.pedidos !== sistema.pedidos && (
+            <Aviso id={`caja-cambio-${branch.id}-${fecha}`} firma={sistema.pedidos}>
+              Los pedidos cambiaron después del cierre ({cierre.pedidos} → {sistema.pedidos}). Edita el cierre y guárdalo para actualizar las cifras.
+            </Aviso>
+          )}
+          <button type="button" className="btn btn--ghost" onClick={() => setEditando(true)}>
+            Editar cierre
+          </button>
+        </section>
+        <PedidosDelDia pedidos={pedidosDia} />
+      </div>
+    );
+  }
+
+  return (
+    <form className="caja-flujo caja-flujo--form" onSubmit={guardar}>
+      {ventas}
+      <div className="caja-grid">
+        <div className="caja-principal">
+          <section className="panel-card caja-paso">
+            <h2 className="caja-paso__titulo">
+              <span>1</span> Fondo y gastos
+            </h2>
+            <label className="caja-linea">
+              <span>
+                <strong>Fondo inicial</strong>
+                <small>Efectivo con que se abrió la caja.</small>
+              </span>
+              <Monto value={declarado.fondo_inicial} onChange={set("fondo_inicial")} label="Fondo inicial" />
+            </label>
+            <label className="caja-linea">
+              <span>
+                <strong>Pago al repartidor</strong>
+                <small>
+                  Sugerido: {sistema.deliveries} × {fmt(sistema.tarifa_repartidor)} = {fmt(sistema.total_repartidor)}
+                </small>
+              </span>
+              <Monto value={declarado.pago_repartidor} onChange={set("pago_repartidor")} label="Pago al repartidor" />
+            </label>
+            {declarado.otros_egresos.map((eg, i) => (
+              <div key={i} className="caja-egreso">
+                <input
+                  value={eg.detalle}
+                  placeholder="Otro gasto (ej. gas)"
+                  onChange={(e) => setEgreso(i, { detalle: e.target.value })}
+                  aria-label="Detalle del gasto"
+                />
+                <Monto value={eg.monto} onChange={(v) => setEgreso(i, { monto: v })} label="Monto del gasto" />
+                <button
+                  type="button"
+                  aria-label="Quitar gasto"
+                  onClick={() => setDeclarado((d) => ({ ...d, otros_egresos: d.otros_egresos.filter((_, j) => j !== i) }))}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="caja-toggle"
+              onClick={() => setDeclarado((d) => ({ ...d, otros_egresos: [...d.otros_egresos, { detalle: "", monto: "" }] }))}
+            >
+              + Otro gasto pagado con efectivo
+            </button>
+            <label className="field">
+              <span>Observaciones (opcional)</span>
+              <input value={declarado.observaciones} onChange={(e) => set("observaciones")(e.target.value)} />
+            </label>
+          </section>
+
+          <section className="panel-card caja-paso">
+            <h2 className="caja-paso__titulo">
+              <span>2</span> Cuenta y anota
+            </h2>
+            <table className="caja-tabla caja-tabla--conteo">
+              <thead>
+                <tr>
+                  <th>Medio</th>
+                  <th className="num">Debería haber</th>
+                  <th className="num">Contaste</th>
+                  <th className="num">Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Fila
+                  titulo="Efectivo"
+                  ayuda="Billetes y monedas, con el fondo."
+                  deberia={r.esperado}
+                  detalle={`${fmt(Number(declarado.fondo_inicial) || 0)} + ${fmt(r.ventasEfectivo)} − ${fmt(r.egresosEfectivo)}`}
+                  value={declarado.efectivo_contado}
+                  onChange={set("efectivo_contado")}
+                  dif={r.difEfectivo}
+                />
+                <Fila
+                  titulo="Débito"
+                  ayuda="Total del cierre del POS."
+                  deberia={r.ventasDebito}
+                  value={declarado.tarjetas}
+                  onChange={set("tarjetas")}
+                  dif={r.difTarjetas}
+                />
+                <Fila
+                  titulo="Transferencias"
+                  ayuda="Lo que llegó a la cuenta."
+                  deberia={r.ventasTransferencia}
+                  value={declarado.transferencias}
+                  onChange={set("transferencias")}
+                  dif={r.difTransferencias}
+                />
+              </tbody>
+            </table>
+            <p className="panel-muted caja-paso__ayuda">Efectivo que debería haber = fondo + ventas en efectivo − repartidor y gastos.</p>
+          </section>
+        </div>
+        <PedidosDelDia pedidos={pedidosDia} />
+      </div>
+
+      <div className="caja-barra">
+        <div className="caja-barra__resultado">
+          {completo ? (
+            <>
+              <Resultado value={r.difTotal} grande />
+              <small className="panel-muted">{r.difTotal === 0 ? "Todo coincide." : "Revisa el conteo o explícalo en observaciones."}</small>
+            </>
+          ) : (
+            <small className="panel-muted">Anota efectivo, débito y transferencias (0 si no hubo) para ver el resultado.</small>
+          )}
+        </div>
+        <div className="caja-acciones">
+          {cierre && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setDeclarado(fromClosing(cierre));
+                setEditando(false);
+              }}
+            >
+              Cancelar
+            </button>
+          )}
+          <button type="submit" className="btn btn--primary" disabled={busy || !completo}>
+            {busy ? "Guardando…" : cierre ? "Guardar cambios" : `Cerrar caja de ${branch.name}`}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// ── Historial ─────────────────────────────────────────────────────────────────
+function Historial({ branch, onVer }) {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchRecentClosings(branch.id, 30)
+      .then((r) => !cancelled && (setRows(r), setError("")))
+      .catch((e) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [branch.id]);
+
+  if (error) return <p className="flash flash--error">{error}</p>;
+  if (!rows) return <p className="panel-muted">Cargando…</p>;
+  if (rows.length === 0) return <p className="panel-muted">Todavía no hay cierres en {branch.name}.</p>;
+
+  const celda = (v) => (v === 0 ? <span className="caja-ok">✓</span> : <Resultado value={v} />);
+  return (
+    <div className="panel-card caja-historial">
+      <p className="panel-muted">Últimos cierres de {branch.name}. Toca un día para ver el detalle.</p>
+      <table className="caja-tabla caja-tabla--historial">
+        <thead>
+          <tr>
+            <th>Día</th>
+            <th className="num">Vendido</th>
+            <th className="num">Efectivo</th>
+            <th className="num">Débito</th>
+            <th className="num">Transf.</th>
+            <th className="num">Resultado</th>
+            <th>Cerró</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => (
+            <tr key={c.fecha} onClick={() => onVer(c.fecha)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onVer(c.fecha)}>
+              <td data-label="Día">{formatFecha(c.fecha)}</td>
+              <td className="num" data-label="Vendido">
+                {fmt(c.ventas_total)}
+              </td>
+              <td className="num" data-label="Efectivo">
+                {celda(c.diferencia_efectivo)}
+              </td>
+              <td className="num" data-label="Débito">
+                {celda(c.diferencia_tarjetas)}
+              </td>
+              <td className="num" data-label="Transf.">
+                {celda(c.diferencia_transferencias)}
+              </td>
+              <td className="num" data-label="Resultado">
+                <Resultado value={c.diferencia_total} />
+              </td>
+              <td className="panel-muted" data-label="Cerró">
+                {c.cerrado_por_nombre}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -59,14 +497,8 @@ export default function CajaPage() {
   const [branches, setBranches] = useState(null);
   const [branchId, setBranchId] = useState("");
   const [fecha, setFecha] = useState(() => isoLocal());
-  const [sistema, setSistema] = useState(null);
-  const [cierre, setCierre] = useState(null);
-  const [recientes, setRecientes] = useState([]);
-  const [declarado, setDeclarado] = useState(emptyDeclarado);
-  const [version, setVersion] = useState(0);
+  const [tab, setTab] = useState("cierre");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [verPedidos, setVerPedidos] = useState(false);
   const [flashNode, flash] = useFlash();
 
   useEffect(() => {
@@ -83,275 +515,73 @@ export default function CajaPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!branchId) return;
-    let cancelled = false;
-    Promise.all([fetchCashSummary(branchId, fecha), fetchClosing(branchId, fecha), fetchRecentClosings(branchId)])
-      .then(([s, c, r]) => {
-        if (cancelled) return;
-        setSistema(s);
-        setCierre(c);
-        setRecientes(r);
-        setDeclarado(c ? fromClosing(c) : emptyDeclarado());
-        setError("");
-      })
-      .catch((e) => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [branchId, fecha, version]);
-
   const branch = branches?.find((b) => b.id === branchId);
   const pedidosDia = (panel.orders ?? [])
     .filter((o) => o.sucursal === branch?.name && o.fecha === fecha)
-    .sort((a, b) => a.horario.localeCompare(b.horario));
-  const r = sistema ? calcularCuadratura(sistema, declarado) : null;
-
-  const set = (k) => (v) => setDeclarado((d) => ({ ...d, [k]: v }));
-  const setEgreso = (i, patch) =>
-    setDeclarado((d) => ({ ...d, otros_egresos: d.otros_egresos.map((e, j) => (j === i ? { ...e, ...patch } : e)) }));
-
-  const guardar = async (e) => {
-    e.preventDefault();
-    if (sistema.pedidos_pendientes > 0 && !cierre) {
-      const ok = window.confirm(
-        `Hay ${sistema.pedidos_pendientes} pedido(s) sin completar en ${branch.name}. ¿Cerrar la caja igual?`
-      );
-      if (!ok) return;
-    }
-    setBusy(true);
-    try {
-      const body = {
-        ...declarado,
-        otros_egresos: declarado.otros_egresos.filter((x) => Number(x.monto) > 0).map((x) => ({ detalle: x.detalle, monto: Math.round(Number(x.monto)) })),
-      };
-      for (const k of ["fondo_inicial", "efectivo_contado", "tarjetas", "transferencias"]) body[k] = Math.round(Number(body[k]) || 0);
-      await saveClosing(branchId, fecha, body);
-      flash(cierre ? "Cierre actualizado." : "Caja cerrada.");
-      setVersion((v) => v + 1);
-    } catch (err) {
-      flash(err.message, "error");
-    } finally {
-      setBusy(false);
-    }
-  };
+    // Del más reciente al más antiguo (por cuándo se tomó el pedido).
+    .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
 
   return (
     <div className="panel-page panel-page--wide">
       <div className="panel-head">
         <div>
           <h1 className="panel-title">Caja</h1>
-          <p className="panel-muted">Cuadratura del día por local: lo que dice el sistema contra lo que hay en caja.</p>
+          <p className="panel-muted">Al final del día, cuenta lo que hay y compáralo con lo que se vendió.</p>
         </div>
       </div>
       {flashNode}
       {error && <p className="flash flash--error">{error}</p>}
       {!branches && !error && <p className="panel-muted">Cargando…</p>}
 
-      {branches && (
-        <div className="kanban__bar">
-          <select value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Sucursal">
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <div className="kanban__day">
-            <button type="button" onClick={() => setFecha((f) => sumarDias(f, -1))} aria-label="Día anterior">
-              ‹
-            </button>
-            <span>{formatFecha(fecha)}</span>
-            <button type="button" onClick={() => setFecha((f) => sumarDias(f, 1))} aria-label="Día siguiente">
-              ›
-            </button>
-          </div>
-          {fecha !== isoLocal() && (
-            <button type="button" className="kanban__today" onClick={() => setFecha(isoLocal())}>
-              Hoy
-            </button>
-          )}
-          <span className={`caja-estado ${cierre ? "is-closed" : ""}`}>
-            {cierre
-              ? `Cerrada por ${cierre.cerrado_por_nombre || "—"} · ${fechaHora(cierre.cerrado_at)}${
-                  cierre.editado_por_nombre ? ` · editada por ${cierre.editado_por_nombre} (${fechaHora(cierre.updated_at)})` : ""
-                }`
-              : "Sin cerrar"}
-          </span>
-        </div>
-      )}
-
-      {sistema && r && (
-        <form className="caja" onSubmit={guardar}>
-          <section className="panel-card caja-card">
-            <h2 className="panel-subtitle">Lo que trae el sistema</h2>
-            <dl className="caja-kv">
-              <div>
-                <dt>Pedidos del día</dt>
-                <dd>{sistema.pedidos}</dd>
-              </div>
-              <div>
-                <dt>Total vendido</dt>
-                <dd>{fmt(sistema.ventas_total)}</dd>
-              </div>
-              {Object.entries(sistema.ventas_por_metodo).map(([m, total]) => (
-                <div key={m} className="caja-kv__sub">
-                  <dt>{METODOS[m] ?? m}</dt>
-                  <dd>{fmt(total)}</dd>
-                </div>
+      {branch && (
+        <>
+          <Tabs
+            tabs={[
+              { id: "cierre", label: "Cerrar caja" },
+              { id: "historial", label: "Historial" },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+          <div className="kanban__bar">
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Local">
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
               ))}
-              <div>
-                <dt>
-                  Repartidor: {sistema.deliveries} delivery × {fmt(sistema.tarifa_repartidor)}
-                </dt>
-                <dd className={sistema.total_repartidor ? "is-out" : ""}>
-                  {sistema.total_repartidor ? "−" : ""}
-                  {fmt(sistema.total_repartidor)}
-                </dd>
-              </div>
-            </dl>
-            {sistema.pedidos_pendientes > 0 && (
-              <p className="caja-warn">
-                ⚠️ {sistema.pedidos_pendientes} pedido(s) siguen sin completar. Revísalos antes de cerrar.
-              </p>
-            )}
-            {cierre && cierre.pedidos !== sistema.pedidos && (
-              <p className="caja-warn">
-                Los pedidos cambiaron desde el cierre ({cierre.pedidos} → {sistema.pedidos}). Guarda de nuevo para actualizar las cifras.
-              </p>
-            )}
-            {pedidosDia.length > 0 && (
+            </select>
+            {tab === "cierre" && (
               <>
-                <button type="button" className="caja-toggle" onClick={() => setVerPedidos((v) => !v)} aria-expanded={verPedidos}>
-                  {verPedidos ? "Ocultar pedidos" : `Ver los ${pedidosDia.length} pedidos por hora`}
-                </button>
-                {verPedidos && (
-                  <ul className="caja-pedidos">
-                    {pedidosDia.map((o) => (
-                      <li key={o.id}>
-                        <span>{o.horario}</span>
-                        <b>{o.orderId}</b>
-                        <span className="caja-pedidos__cli">{o.cliente.nombre || "Sin nombre"}</span>
-                        <span className="panel-muted">
-                          {o.tipo === "delivery" ? "Delivery" : "Retiro"} · {METODOS[o.metodoPago] ?? o.metodoPago}
-                          {o.estado !== "completado" && " · sin completar"}
-                        </span>
-                        <span>{fmt(o.total)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="kanban__day">
+                  <button type="button" onClick={() => setFecha((f) => sumarDias(f, -1))} aria-label="Día anterior">
+                    ‹
+                  </button>
+                  <span>{formatFecha(fecha)}</span>
+                  <button type="button" onClick={() => setFecha((f) => sumarDias(f, 1))} aria-label="Día siguiente">
+                    ›
+                  </button>
+                </div>
+                {fecha !== isoLocal() && (
+                  <button type="button" className="kanban__today" onClick={() => setFecha(isoLocal())}>
+                    Hoy
+                  </button>
                 )}
               </>
             )}
-          </section>
-
-          <section className="panel-card caja-card">
-            <h2 className="panel-subtitle">Lo que hay en caja</h2>
-            <div className="editor__row">
-              <Money label="Fondo inicial" value={declarado.fondo_inicial} onChange={set("fondo_inicial")} hint="Efectivo con que partió la caja." />
-              <Money label="Efectivo contado" value={declarado.efectivo_contado} onChange={set("efectivo_contado")} hint="Todo el efectivo al cerrar." />
-            </div>
-            <div className="editor__row">
-              <Money label="Tarjetas (según el POS)" value={declarado.tarjetas} onChange={set("tarjetas")} />
-              <Money label="Transferencias" value={declarado.transferencias} onChange={set("transferencias")} />
-            </div>
-            <fieldset className="field">
-              <legend>Otros egresos en efectivo</legend>
-              {declarado.otros_egresos.map((eg, i) => (
-                <div key={i} className="caja-egreso">
-                  <input
-                    value={eg.detalle}
-                    placeholder="Detalle (ej. compra de hielo)"
-                    onChange={(e) => setEgreso(i, { detalle: e.target.value })}
-                    aria-label="Detalle del egreso"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    value={eg.monto}
-                    placeholder="Monto"
-                    onChange={(e) => setEgreso(i, { monto: e.target.value })}
-                    aria-label="Monto del egreso"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Quitar egreso"
-                    onClick={() => setDeclarado((d) => ({ ...d, otros_egresos: d.otros_egresos.filter((_, j) => j !== i) }))}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => setDeclarado((d) => ({ ...d, otros_egresos: [...d.otros_egresos, { detalle: "", monto: "" }] }))}
-              >
-                + Agregar egreso
-              </button>
-            </fieldset>
-            <label className="field">
-              <span>Observaciones</span>
-              <textarea rows={2} value={declarado.observaciones} onChange={(e) => set("observaciones")(e.target.value)} />
-            </label>
-          </section>
-
-          <section className="panel-card caja-card caja-result">
-            <h2 className="panel-subtitle">Resultado</h2>
-            <dl className="caja-kv">
-              <div>
-                <dt>Fondo inicial</dt>
-                <dd>{fmt(Number(declarado.fondo_inicial) || 0)}</dd>
-              </div>
-              <div>
-                <dt>+ Ventas en efectivo (pago al retirar − tarjetas)</dt>
-                <dd>{r.ventasEfectivo < 0 ? "−" : ""}{fmt(Math.abs(r.ventasEfectivo))}</dd>
-              </div>
-              <div>
-                <dt>− Egresos en efectivo (repartidor y otros)</dt>
-                <dd className={r.egresosEfectivo ? "is-out" : ""}>
-                  {r.egresosEfectivo ? "−" : ""}
-                  {fmt(r.egresosEfectivo)}
-                </dd>
-              </div>
-              <div className="caja-kv__total">
-                <dt>Efectivo esperado</dt>
-                <dd>{r.esperado < 0 ? "−" : ""}{fmt(Math.abs(r.esperado))}</dd>
-              </div>
-            </dl>
-            <div className="caja-difs">
-              <Diferencia label="Diferencia de efectivo" value={r.difEfectivo} />
-              <Diferencia label="Diferencia de transferencias" value={r.difTransferencias} />
-              <Diferencia label="Diferencia total" value={r.difTotal} strong />
-            </div>
-            <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
-              {busy ? "Guardando…" : cierre ? "Guardar cambios del cierre" : "Cerrar caja"}
-            </button>
-          </section>
-        </form>
-      )}
-
-      {recientes.length > 0 && (
-        <section className="caja-recientes">
-          <h2 className="panel-subtitle">Cierres anteriores · {branch?.name}</h2>
-          <ul>
-            {recientes.map((c) => (
-              <li key={c.fecha}>
-                <button type="button" onClick={() => setFecha(c.fecha)} className={c.fecha === fecha ? "is-active" : ""}>
-                  <span>{formatFecha(c.fecha)}</span>
-                  <span className="panel-muted">{c.cerrado_por_nombre}</span>
-                  <strong className={c.diferencia_total === 0 ? "is-in" : "is-out"}>
-                    {c.diferencia_total === 0
-                      ? "Cuadra"
-                      : `${c.diferencia_total > 0 ? "Sobra" : "Falta"} ${fmt(Math.abs(c.diferencia_total))}`}
-                  </strong>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+          </div>
+          {tab === "cierre" ? (
+            <Cierre key={`${branch.id}|${fecha}`} branch={branch} fecha={fecha} pedidosDia={pedidosDia} flash={flash} />
+          ) : (
+            <Historial
+              branch={branch}
+              onVer={(f) => {
+                setFecha(f);
+                setTab("cierre");
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

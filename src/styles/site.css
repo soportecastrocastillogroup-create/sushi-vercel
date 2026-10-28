@@ -1719,6 +1719,11 @@
   color: var(--muted);
   font-size: 14px;
 }
+.cart__eta {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
 .cart__error {
   display: grid;
   gap: 8px;

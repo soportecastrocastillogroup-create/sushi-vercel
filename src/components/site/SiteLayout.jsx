@@ -38,7 +38,7 @@ function SiteShell() {
         onBranchChange={changeBranch}
       />
       <main className="site-main">
-        <Outlet context={{ whatsappNum, publicMenu, branch, changeBranch, site, timeSlots: settings?.timeSlots }} />
+        <Outlet context={{ whatsappNum, publicMenu, branch, changeBranch, site }} />
       </main>
       <SiteFooter whatsappNum={whatsappNum} site={site} />
       {showBar && <MobileActionBar whatsappNum={whatsappNum} />}
@@ -48,7 +48,6 @@ function SiteShell() {
         onBranchChange={changeBranch}
         costoDelivery={settings?.costoDelivery}
         blockedWeekdays={settings?.blockedWeekdays}
-        timeSlots={settings?.timeSlots}
         whatsappNum={whatsappNum}
       />
     </div>

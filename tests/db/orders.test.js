@@ -1,5 +1,5 @@
 // Pruebas de integración contra Pedidos Desarrollo (PRD 02 · Etapas 1 y 2):
-// RLS de pedidos, create_order, cupo por hora y pedidos simultáneos.
+// RLS de pedidos, create_order, cupo por bloque y pedidos simultáneos.
 //
 // Conexión en tests/db/helpers.js. Crea pedidos en una fecha de 2031 y los
 // borra al terminar; cada corrida consume algunos números de pedido.
@@ -36,7 +36,7 @@ before(async () => {
   anon = client();
   admin = await login("administrador");
   colab = await login("colaborador");
-  const { data, error } = await admin.from("branches").select("id, name, cupo_por_hora");
+  const { data, error } = await admin.from("branches").select("id, name, cupo_por_bloque");
   if (error) throw error;
   cuposOriginales = data;
 });
@@ -45,14 +45,14 @@ after(async () => {
   if (!admin) return;
   await admin.from("orders").delete().eq("fecha", FECHA);
   for (const b of cuposOriginales) {
-    await admin.from("branches").update({ cupo_por_hora: b.cupo_por_hora }).eq("id", b.id);
+    await admin.from("branches").update({ cupo_por_bloque: b.cupo_por_bloque }).eq("id", b.id);
   }
   const { data } = await admin.from("orders").select("id").eq("fecha", FECHA);
   assert.equal(data.length, 0, "quedaron pedidos de prueba sin borrar");
 });
 
 const setCupo = async (sucursal, cupo) => {
-  const { error } = await admin.from("branches").update({ cupo_por_hora: cupo }).eq("name", sucursal);
+  const { error } = await admin.from("branches").update({ cupo_por_bloque: cupo }).eq("name", sucursal);
   if (error) throw error;
 };
 
@@ -140,45 +140,45 @@ describe("Etapa 1 · create_order", () => {
   });
 });
 
-describe("Etapa 2 · cupo por hora y por sucursal", () => {
+describe("Cupo por bloque de 30 minutos y por sucursal", () => {
   test("solo el administrador cambia el cupo", async () => {
-    const { data } = await colab.from("branches").update({ cupo_por_hora: 99 }).eq("name", "La Paz").select();
+    const { data } = await colab.from("branches").update({ cupo_por_bloque: 99 }).eq("name", "La Paz").select();
     assert.equal(data?.length ?? 0, 0);
-    const { data: b } = await admin.from("branches").select("cupo_por_hora").eq("name", "La Paz").single();
-    assert.notEqual(b.cupo_por_hora, 99);
+    const { data: b } = await admin.from("branches").select("cupo_por_bloque").eq("name", "La Paz").single();
+    assert.notEqual(b.cupo_por_bloque, 99);
   });
 
   test("un bloque lleno rechaza pedidos sin afectar a la otra sucursal", async () => {
     await setCupo("La Paz", 2);
     await setCupo("Loncoche", 2);
     assert.ifError((await crear(colab, pedido("La Paz", "20:00"))).error);
-    const segundo = await crear(colab, pedido("La Paz", "20:45"));
+    const segundo = await crear(colab, pedido("La Paz", "20:25"));
     assert.ifError(segundo.error);
 
-    // El tercero del bloque de las 20 se rechaza, aunque sea otra franja.
+    // El tercero del bloque 20:00–20:30 se rechaza, aunque sea otra hora.
     const lleno = await crear(colab, pedido("La Paz", "20:15"));
     assert.equal(lleno.error?.code, "SL409");
-    assert.deepEqual(JSON.parse(lleno.error.details), { hora: 20, pedidos: 2, cupo: 2 });
+    assert.deepEqual(JSON.parse(lleno.error.details), { bloque: "20:00", pedidos: 2, cupo: 2 });
 
     // Un completado sigue contando.
     await colab.from("orders").update({ estado: "completado" }).eq("id", segundo.data.id);
-    assert.equal((await crear(colab, pedido("La Paz", "20:30"))).error?.code, "SL409");
+    assert.equal((await crear(colab, pedido("La Paz", "20:10"))).error?.code, "SL409");
 
-    // Loncoche tiene su propio cupo, y el bloque de las 21 de La Paz está libre.
+    // Loncoche tiene su propio cupo, y el bloque 20:30 de La Paz está libre.
     assert.ifError((await crear(colab, pedido("Loncoche", "20:15"))).error);
-    assert.ifError((await crear(colab, pedido("La Paz", "21:00"))).error);
+    assert.ifError((await crear(colab, pedido("La Paz", "20:30"))).error);
   });
 
   test("el personal puede pasarse del cupo con p_forzar", async () => {
     await setCupo("La Paz", 2);
-    const { data, error } = await crear(colab, pedido("La Paz", "20:30"), [ITEM], true);
+    const { data, error } = await crear(colab, pedido("La Paz", "20:05"), [ITEM], true);
     assert.ifError(error);
     const { data: bloque } = await colab
       .from("orders")
       .select("id")
       .eq("fecha", FECHA)
       .eq("sucursal", "La Paz")
-      .like("horario", "20:%");
+      .in("horario", ["20:00", "20:05", "20:10", "20:15", "20:25"]);
     assert.equal(bloque.length, 3);
     assert.ok(data.id);
   });
@@ -193,7 +193,7 @@ describe("Etapa 2 · cupo por hora y por sucursal", () => {
     await setCupo("Loncoche", 2);
     assert.ifError((await crear(colab, pedido("Loncoche", "19:00"))).error);
     const otros = await Promise.all([admin, colab, await login("colaborador"), await login("administrador"), await login("colaborador")]
-      .map((c, i) => crear(c, pedido("Loncoche", `19:${String(i * 10).padStart(2, "0")}`))));
+      .map((c, i) => crear(c, pedido("Loncoche", `19:${String(i * 5).padStart(2, "0")}`))));
     const ok = otros.filter((r) => !r.error);
     const llenos = otros.filter((r) => r.error?.code === "SL409");
     assert.equal(ok.length, 1, JSON.stringify(otros.map((r) => r.error?.message ?? "ok")));

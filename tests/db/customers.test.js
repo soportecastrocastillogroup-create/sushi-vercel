@@ -5,21 +5,22 @@
 // Usa cliente.pruebas y cliente2.pruebas (scripts/seed-test-accounts.mjs).
 // Los clientes solo pueden pedir para hoy, así que estas pruebas crean pedidos
 // para hoy y los borran al terminar. Si hoy es un día cerrado lo desbloquean, y
-// si ya no quedan franjas a más de 30 minutos agregan una (23:45); ambas cosas
-// se revierten al final. No corren después de las 23:15.
+// si ya no quedan bloques agregan la franja 23:45; ambas cosas se revierten al
+// final. No corren después de las 23:00 (hora de Chile).
 // Run: npm run test:db
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { anonClient, callFunction, credentials, horaChile, isoChile, login } from "./helpers.js";
+import { bloqueDe } from "../../src/utils/dates.js";
 
-let admin, colab, cliente, cliente2, yo, producto, promo, fecha, slots, cupoOriginal, desbloqueado, franjaExtra;
+let admin, colab, cliente, cliente2, yo, producto, promo, fecha, bloques, cupoOriginal, desbloqueado, franjaExtra;
 const ids = [];
 
 const pedido = (extra = {}) => ({
   sucursal: "La Paz",
   tipo: "retiro",
   fecha,
-  horario: slots[0],
+  horario: bloques[0].bloque,
   metodoPago: "transferencia",
   cliente: { nombre: "Cliente Pruebas", telefono: "+56900000001" },
   ...extra,
@@ -50,10 +51,10 @@ before(async () => {
   producto = ok.find((p) => p.promo_options.length === 0);
   promo = ok.find((p) => p.promo_options.length > 0);
 
-  // Hoy, abierto y con al menos una franja a más de 30 minutos.
+  // Hoy, abierto y con al menos un bloque que no haya pasado.
   fecha = isoChile(0);
-  const ahora = horaChile(30);
-  assert.ok(ahora > "00:30" && ahora < "23:45", "estas pruebas no corren después de las 23:15 (hora de Chile)");
+  const ahora = horaChile();
+  assert.ok(ahora > "00:30" && ahora < "23:00", "estas pruebas no corren después de las 23:00 (hora de Chile)");
   const { data: blocked } = await colab.from("blocked_weekdays").select("dow");
   const { data: unlocked } = await colab.from("unlocked_dates").select("date");
   if (blocked.some((b) => b.dow === new Date(fecha + "T12:00:00Z").getUTCDay()) && !unlocked.some((u) => u.date === fecha)) {
@@ -61,24 +62,24 @@ before(async () => {
     assert.ifError(error);
     desbloqueado = fecha;
   }
-  const { data: s } = await cliente.rpc("available_slots", { p_sucursal: "La Paz", p_fecha: fecha });
-  // Primero las franjas de bloques vacíos, por si hay pedidos de hoy (p. ej. de
-  // scripts/seed-demo-data.mjs).
-  const futuras = s.filter((x) => x.slot.padStart(5, "0") > ahora);
-  slots = [...futuras.filter((x) => x.pedidos === 0), ...futuras.filter((x) => x.pedidos > 0)].map((x) => x.slot);
-  if (slots.length === 0) {
+  let { data: s } = await cliente.rpc("available_blocks", { p_sucursal: "La Paz", p_fecha: fecha });
+  if (s.length === 0) {
     const { error } = await admin.from("time_slots").insert({ slot: "23:45", sort_order: 999 });
     assert.ifError(error);
     franjaExtra = "23:45";
-    slots = [franjaExtra];
+    ({ data: s } = await cliente.rpc("available_blocks", { p_sucursal: "La Paz", p_fecha: fecha }));
   }
-  ({ data: { cupo_por_hora: cupoOriginal } } = await admin.from("branches").select("cupo_por_hora").eq("name", "La Paz").single());
+  bloques = s;
+  // Cupo alto mientras corren, para no depender de los pedidos de hoy (p. ej.
+  // de scripts/seed-demo-data.mjs); la prueba de cupo lo baja.
+  ({ data: { cupo_por_bloque: cupoOriginal } } = await admin.from("branches").select("cupo_por_bloque").eq("name", "La Paz").single());
+  await admin.from("branches").update({ cupo_por_bloque: 99 }).eq("name", "La Paz");
 });
 
 after(async () => {
   if (!admin) return;
   if (ids.length) await admin.from("orders").delete().in("id", ids);
-  await admin.from("branches").update({ cupo_por_hora: cupoOriginal }).eq("name", "La Paz");
+  await admin.from("branches").update({ cupo_por_bloque: cupoOriginal }).eq("name", "La Paz");
   if (desbloqueado) await colab.from("unlocked_dates").delete().eq("date", desbloqueado);
   if (franjaExtra) await admin.from("time_slots").delete().eq("slot", franjaExtra);
   if (yo) {
@@ -149,6 +150,24 @@ describe("Etapa 5 · pedido con cuenta", () => {
     assert.equal(data.estado, "abierto");
     assert.equal(data.customer_id, yo.id);
     assert.equal(data.cliente_email, yo.email);
+    // La hora la pone la base: la estimada (o el inicio, si el bloque es más tarde), dentro del bloque elegido.
+    assert.equal(bloqueDe(data.horario), bloques[0].bloque);
+    assert.ok(data.horario >= bloques[0].horario, `${data.horario} antes de ${bloques[0].horario}`);
+  });
+
+  test("hoy, el bloque actual sale con la hora estimada y uno más tarde con su inicio", () => {
+    const [actual, ...despues] = bloques;
+    const estimada = horaChile(20);
+    if (actual.bloque <= estimada) assert.ok(actual.horario >= estimada && bloqueDe(actual.horario) === actual.bloque, JSON.stringify(actual));
+    for (const b of despues) assert.equal(b.horario, b.bloque);
+  });
+
+  test("acepta efectivo, débito y transferencia, también en delivery", async () => {
+    for (const metodoPago of ["efectivo", "debito"]) {
+      const { error } = await crear(cliente, pedido({ tipo: "delivery", direccion: "Calle 123", metodoPago }));
+      assert.ifError(error);
+    }
+    await colab.from("orders").update({ estado: "completado" }).in("id", ids);
   });
 
   test("valida opciones de promo", async () => {
@@ -167,11 +186,14 @@ describe("Etapa 5 · pedido con cuenta", () => {
     const casos = [
       pedido({ cliente: { nombre: "Ana", telefono: "" } }),
       pedido({ tipo: "delivery", direccion: "" }),
-      pedido({ tipo: "delivery", direccion: "Calle 123", metodoPago: "pago_contra_entrega" }),
+      pedido({ metodoPago: "pago_contra_entrega" }),
       pedido({ horario: "16:07" }),
       pedido({ fecha: isoChile(-1) }),
       pedido({ fecha: isoChile(1) }),
     ];
+    // Un bloque que ya pasó (si hoy hay alguno antes del actual).
+    const pasado = bloqueDe(horaChile(-60));
+    if (pasado >= "17:00" && pasado < bloques[0].bloque) casos.push(pedido({ horario: pasado }));
     for (const o of casos) {
       const { error } = await crear(cliente, o);
       assert.equal(error?.code, "SL422", JSON.stringify(o));
@@ -183,24 +205,21 @@ describe("Etapa 5 · pedido con cuenta", () => {
   });
 
   test("un cliente no puede pasarse del cupo aunque pida p_forzar", async () => {
-    await admin.from("branches").update({ cupo_por_hora: 1 }).eq("name", "La Paz");
-    const ultimo = slots.at(-1);
+    await admin.from("branches").update({ cupo_por_bloque: 1 }).eq("name", "La Paz");
+    const ultimo = bloques.at(-1).bloque;
     const lleno = await crear(colab, { ...pedido({ horario: ultimo }), fuente: "presencial" }, [{ productId: producto.id, nombre: "x", precio: 1000, qty: 1 }], true);
     assert.ifError(lleno.error);
-    const { data: disp } = await cliente.rpc("available_slots", { p_sucursal: "La Paz", p_fecha: fecha });
-    assert.equal(disp.find((s) => s.slot === ultimo).disponible, false);
+    const { data: disp } = await cliente.rpc("available_blocks", { p_sucursal: "La Paz", p_fecha: fecha });
+    assert.equal(disp.find((b) => b.bloque === ultimo).disponible, false);
     const r = await crear(cliente, pedido({ horario: ultimo }), undefined, true);
     assert.equal(r.error?.code, "SL409");
-    await admin.from("branches").update({ cupo_por_hora: cupoOriginal }).eq("name", "La Paz");
+    await admin.from("branches").update({ cupo_por_bloque: 99 }).eq("name", "La Paz");
   });
 
   test("máximo 3 pedidos sin completar por cuenta", async () => {
-    // Cupo alto para que el límite que salte sea el de pedidos por cuenta.
-    await admin.from("branches").update({ cupo_por_hora: 99 }).eq("name", "La Paz");
     for (let i = 0; i < 3; i++) assert.ifError((await crear(cliente, pedido())).error);
     const r = await crear(cliente, pedido());
     assert.equal(r.error?.code, "SL429");
-    await admin.from("branches").update({ cupo_por_hora: cupoOriginal }).eq("name", "La Paz");
   });
 
   test("cada cliente ve solo sus pedidos y no los edita", async () => {

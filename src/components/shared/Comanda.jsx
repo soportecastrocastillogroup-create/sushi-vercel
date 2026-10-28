@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { fmt } from "../../utils/format.js";
 import { cambiosCosto } from "../../utils/cart.js";
-import { FUENTES, getPagos } from "../../constants/estados.js";
+import { FUENTES, pagoLabel } from "../../constants/estados.js";
 
 export function buildComandaData(order, costoDelivery = 0) {
   const sub = order.items.reduce(
@@ -14,9 +14,7 @@ export function buildComandaData(order, costoDelivery = 0) {
 
 export function ComandaPreview({ order, onClose, settings }) {
   const { sub, del, tot } = buildComandaData(order, settings.costoDelivery);
-  const pagos = getPagos(order.tipo);
-  const pago =
-    pagos.find((m) => m.id === order.metodoPago)?.label || order.metodoPago;
+  const pago = pagoLabel(order.metodoPago);
   const src = FUENTES.find((f) => f.id === order.fuente)?.label || order.fuente;
   const hora = new Date(order.timestamp).toLocaleTimeString("es-CL", {
     hour: "2-digit",
@@ -357,9 +355,7 @@ export function ComandaPreview({ order, onClose, settings }) {
 
 export function printComanda(order, costoDelivery = 0) {
   const { sub, del, tot } = buildComandaData(order, costoDelivery);
-  const pagos = getPagos(order.tipo);
-  const pago =
-    pagos.find((m) => m.id === order.metodoPago)?.label || order.metodoPago;
+  const pago = pagoLabel(order.metodoPago);
   const src = FUENTES.find((f) => f.id === order.fuente)?.label || order.fuente;
   const hora = new Date(order.timestamp).toLocaleTimeString("es-CL", {
     hour: "2-digit",

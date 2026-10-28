@@ -12,7 +12,9 @@
  * crear. Marcas para reconocerlos:
  *   - pedidos: order_items.cart_id empieza con "demo-"
  *   - Susheros: correo @demo.example.com
- *   - insumos: sort_order >= 900 (se borran con sus movimientos)
+ *   - insumos: el nombre y el orden (900, 901…) de la lista INSUMOS; se borran
+ *     con sus movimientos. Solo el orden no basta: un insumo nuevo creado en
+ *     el panel toma el último orden + 1 (912, 913…).
  *   - cierres de caja: observaciones empiezan con "[demo]"
  * Si hoy es un día cerrado, lo desbloquea (eso no se revierte al limpiar).
  *
@@ -22,9 +24,26 @@
  */
 import { horaChile, isoChile, login } from "../tests/db/helpers.js";
 import { calcularCuadratura } from "../src/utils/caja.js";
+import { bloqueDe } from "../src/utils/dates.js";
 
 const DOMINIO = "@demo.example.com";
 const DEMO_SORT = 900;
+
+// [nombre, unidad, crítico, mínimo, uso diario aprox.]
+const INSUMOS = [
+  ["Salmón", "kg", true, 4, 2.5],
+  ["Arroz", "kg", true, 10, 6],
+  ["Palta", "kg", true, 3, 1.5],
+  ["Queso crema", "kg", true, 3, 1.2],
+  ["Nori", "paquetes", true, 4, 1],
+  ["Camarón", "kg", false, 2, 0.8],
+  ["Kanikama", "kg", false, 1.5, 0.5],
+  ["Panko", "kg", false, 2, 0.6],
+  ["Salsa de soya", "litros", false, 3, 0.8],
+  ["Aceite", "litros", false, 5, 1.5],
+  ["Envases delivery", "unidades", false, 40, 18],
+  ["Palillos", "pares", false, 100, 40],
+];
 
 // Pseudoaleatorio con semilla: cada ejecución genera los mismos datos.
 let semilla = 2610;
@@ -50,7 +69,10 @@ async function limpiar() {
   const ids = [...new Set(items.map((i) => i.order_id))];
   for (let i = 0; i < ids.length; i += 100) must(await admin.from("orders").delete().in("id", ids.slice(i, i + 100)), "borrar pedidos");
   must(await admin.from("cash_closings").delete().like("observaciones", "[demo]%"), "borrar cierres");
-  const insumos = must(await admin.from("inventory_items").select("id").gte("sort_order", DEMO_SORT), "leer insumos demo").map((i) => i.id);
+  const demo = new Set(INSUMOS.map(([nombre], i) => `${nombre}|${DEMO_SORT + i}`));
+  const insumos = must(await admin.from("inventory_items").select("id, nombre, sort_order").gte("sort_order", DEMO_SORT), "leer insumos demo")
+    .filter((i) => demo.has(`${i.nombre}|${i.sort_order}`))
+    .map((i) => i.id);
   if (insumos.length) {
     must(await admin.from("inventory_movements").delete().in("item_id", insumos), "borrar movimientos");
     must(await admin.from("inventory_item_branches").delete().in("item_id", insumos), "borrar mínimos");
@@ -68,7 +90,7 @@ const hoy = isoChile(0);
 const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay();
 const cerrados = new Set(must(await admin.from("blocked_weekdays").select("dow"), "días cerrados").map((d) => d.dow));
 const slots = must(await admin.from("time_slots").select("slot").order("sort_order"), "franjas").map((s) => s.slot);
-const branches = must(await admin.from("branches").select("id, name, cupo_por_hora").eq("active", true).order("sort_order"), "sucursales");
+const branches = must(await admin.from("branches").select("id, name, cupo_por_bloque").eq("active", true).order("sort_order"), "sucursales");
 const productos = must(
   await admin
     .from("products")
@@ -159,9 +181,13 @@ function itemsAlAzar(sucursal) {
   }));
 }
 
+// Ocupación por sucursal, fecha y bloque (30 o 60 min, según la configuración).
+const { bloque_minutos: MIN } = must(await admin.from("app_settings").select("bloque_minutos").eq("id", 1).single(), "configuración");
+const cupoDe = Object.fromEntries(branches.map((b) => [b.name, b.cupo_por_bloque]));
 const ocupacion = {};
+const claveBloque = (sucursal, fecha, h) => `${sucursal}|${fecha}|${bloqueDe(h, MIN)}`;
 async function crearPedido(fecha, sucursal, { horario, estado, forzar = false } = {}) {
-  const libres = slots.filter((h) => (ocupacion[`${sucursal}|${fecha}|${h.slice(0, 2)}`] ?? 0) < 4);
+  const libres = slots.filter((h) => (ocupacion[claveBloque(sucursal, fecha, h)] ?? 0) < cupoDe[sucursal]);
   const h = horario ?? uno(libres.length ? libres : slots);
   const conCuenta = estado === "completado" && cuentas.length && rnd() < 0.1;
   const cliente = conCuenta ? uno(cuentas) : rnd() < 0.6 ? sushero() : null;
@@ -174,7 +200,7 @@ async function crearPedido(fecha, sucursal, { horario, estado, forzar = false } 
     horario: h,
     estado,
     fuente,
-    metodoPago: tipo === "delivery" ? "transferencia" : uno(["transferencia", "pago_contra_entrega"]),
+    metodoPago: uno(["transferencia", "transferencia", "efectivo", "debito"]),
     cliente: cliente ? { nombre: cliente.nombre, telefono: cliente.telefono } : { nombre: uno(ANONIMOS), telefono: fono() },
     direccion: tipo === "delivery" ? cliente?.direccion || `${uno(CALLES)} ${entre(100, 1900)}` : "",
     referencia: tipo === "delivery" && rnd() < 0.3 ? "Casa esquina, reja verde" : "",
@@ -184,7 +210,7 @@ async function crearPedido(fecha, sucursal, { horario, estado, forzar = false } 
     await colab.rpc("create_order", { p_order: order, p_items: itemsAlAzar(sucursal), p_forzar: forzar || !libres.length }),
     `pedido ${fecha} ${sucursal} ${h}`
   );
-  const k = `${sucursal}|${fecha}|${h.slice(0, 2)}`;
+  const k = claveBloque(sucursal, fecha, h);
   ocupacion[k] = (ocupacion[k] ?? 0) + 1;
   // Hora de creación creíble: entre 30 minutos y 3 horas antes del horario.
   const creado = new Date(`${fecha}T${h.padStart(5, "0")}:00-03:00`);
@@ -203,13 +229,13 @@ for (const fecha of pasados) {
   }
 }
 // Hoy: un bloque lleno (20:00 en Loncoche), uno con sobrecupo (21:00 en La Paz)
-// y estados variados.
+// y estados variados. Algunos con hora real (la estimada de un pedido online).
 const ESTADOS_HOY = ["abierto", "abierto", "abierto", "en_proceso", "en_proceso", "listo"];
 for (const b of branches) {
   const fijo = b.name === branches[0].name ? "20:" : "21:";
   const extra = b.name === branches[0].name ? 0 : 1;
-  for (let i = 0; i < 4 + extra; i++, pedidos++) {
-    await crearPedido(hoy, b.name, { horario: slots.find((s) => s.startsWith(fijo) && s.endsWith(uno(["00", "15", "30", "45"]))) ?? `${fijo}00`, estado: uno(ESTADOS_HOY), forzar: i >= 4 });
+  for (let i = 0; i < cupoDe[b.name] + extra; i++, pedidos++) {
+    await crearPedido(hoy, b.name, { horario: `${fijo}${uno(["00", "05", "15", "20", "25"])}`, estado: uno(ESTADOS_HOY), forzar: i >= cupoDe[b.name] });
   }
   for (let i = entre(4, 6); i > 0; i--, pedidos++) await crearPedido(hoy, b.name, { estado: uno(ESTADOS_HOY) });
 }
@@ -217,21 +243,6 @@ for (const b of branches) for (let i = entre(2, 3); i > 0; i--, pedidos++) await
 console.log(`Pedidos: ${pedidos} (${pasados.length} días anteriores, hoy ${hoy} y ${futuro}). Susheros: ${fichas.length}.`);
 
 // ── Inventario ────────────────────────────────────────────────────────────────
-// [nombre, unidad, crítico, mínimo, uso diario aprox.]
-const INSUMOS = [
-  ["Salmón", "kg", true, 4, 2.5],
-  ["Arroz", "kg", true, 10, 6],
-  ["Palta", "kg", true, 3, 1.5],
-  ["Queso crema", "kg", true, 3, 1.2],
-  ["Nori", "paquetes", true, 4, 1],
-  ["Camarón", "kg", false, 2, 0.8],
-  ["Kanikama", "kg", false, 1.5, 0.5],
-  ["Panko", "kg", false, 2, 0.6],
-  ["Salsa de soya", "litros", false, 3, 0.8],
-  ["Aceite", "litros", false, 5, 1.5],
-  ["Envases delivery", "unidades", false, 40, 18],
-  ["Palillos", "pares", false, 100, 40],
-];
 const red = (x) => Math.round(x * 10) / 10;
 const items = must(
   await admin
@@ -296,15 +307,14 @@ for (const fecha of pasados.slice(-4)) {
   for (const b of branches) {
     if (fecha === pasados.at(-1) && b.id === branches[1].id) continue; // uno sin cerrar
     const sistema = must(await colab.rpc("cash_summary", { p_branch_id: b.id, p_fecha: fecha }), "resumen de caja");
-    const retiro = sistema?.ventas_por_metodo?.pago_contra_entrega ?? 0;
     const declarado = {
       fondo_inicial: 20000,
-      tarjetas: Math.round((retiro * (0.3 + rnd() * 0.4)) / 100) * 100,
+      tarjetas: (sistema?.ventas_por_metodo?.debito ?? 0) + uno([0, 0, 0, -2000]),
       transferencias: (sistema?.ventas_por_metodo?.transferencia ?? 0) + uno([0, 0, 0, -1500]),
       otros_egresos: rnd() < 0.5 ? [{ detalle: "Gas", monto: 12000 }] : [],
       observaciones: "[demo] Cierre de demostración",
     };
-    // Con poco pago al retirar y muchos deliveries, el fondo debe alcanzar.
+    // Con poco efectivo y muchos deliveries, el fondo debe alcanzar.
     const previo = calcularCuadratura(sistema, { ...declarado, efectivo_contado: 0 }).esperado;
     if (previo < 5000) declarado.fondo_inicial += Math.ceil((5000 - previo) / 10000) * 10000;
     const { esperado } = calcularCuadratura(sistema, { ...declarado, efectivo_contado: 0 });

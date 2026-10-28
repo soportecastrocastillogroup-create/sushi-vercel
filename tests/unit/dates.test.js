@@ -1,19 +1,19 @@
-// Pruebas de la lógica de cupos por hora (utils/dates.js).
+// Pruebas de la lógica de cupos por bloque (utils/dates.js).
 // Run: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  bloquesCliente,
+  bloqueDe,
   bloquesDe,
   cupoDe,
   getHorariosDisponibles,
-  horaDe,
+  hhmm,
   isoLocal,
-  pedidosEnHora,
+  minutosDe,
+  pedidosEnBloque,
   proponerHorarios,
   rangoBloque,
   sumarDias,
-  textoBloque,
 } from "../../src/utils/dates.js";
 
 const SLOTS = ["17:00", "17:15", "17:30", "17:45", "18:00", "18:15", "18:30", "18:45", "19:00", "19:15"];
@@ -22,54 +22,60 @@ const FECHA = "2031-03-14";
 const AHORA = new Date("2031-03-01T15:00:00Z");
 
 const pedido = (horario, sucursal = "La Paz", extra = {}) => ({ fecha: FECHA, horario, sucursal, estado: "abierto", ...extra });
+const base = (extra = {}) => ({ fecha: FECHA, timeSlots: SLOTS, sucursal: "La Paz", ahora: AHORA, ...extra });
 
-test("horaDe agrupa las franjas por hora", () => {
-  assert.equal(horaDe("17:45"), "17");
-  assert.equal(horaDe("9:15"), "09");
-  assert.deepEqual(bloquesDe(SLOTS), ["17", "18", "19"]);
+test("bloqueDe agrupa por bloques de 30 o 60 minutos", () => {
+  assert.equal(bloqueDe("17:45"), "17:30");
+  assert.equal(bloqueDe("17:29"), "17:00");
+  assert.equal(bloqueDe("9:15"), "09:00");
+  assert.equal(bloqueDe("17:45", 60), "17:00");
+  assert.deepEqual(bloquesDe(SLOTS), ["17:00", "17:30", "18:00", "18:30", "19:00"]);
+  assert.deepEqual(bloquesDe(SLOTS, 60), ["17:00", "18:00", "19:00"]);
+  assert.equal(minutosDe("18:35"), 1115);
+  assert.equal(hhmm(1115), "18:35");
 });
 
-test("pedidosEnHora cuenta el bloque completo de esa sucursal, incluidos los completados", () => {
+test("pedidosEnBloque cuenta el bloque de esa sucursal, incluidos los completados y las horas reales", () => {
   const orders = [
     pedido("18:00"),
-    pedido("18:45", "La Paz", { estado: "completado" }),
+    pedido("18:25", "La Paz", { estado: "completado" }),
+    pedido("18:30"),
     pedido("18:15", "Loncoche"),
-    pedido("19:00"),
-    { ...pedido("18:30"), fecha: "2031-03-15" },
+    { ...pedido("18:10"), fecha: "2031-03-15" },
   ];
-  assert.equal(pedidosEnHora(FECHA, orders, "18:30", "La Paz"), 2);
-  assert.equal(pedidosEnHora(FECHA, orders, "18:00", "Loncoche"), 1);
-  assert.equal(pedidosEnHora(FECHA, orders, "17:00", "La Paz"), 0);
+  assert.equal(pedidosEnBloque(FECHA, orders, "18:15", "La Paz"), 2);
+  assert.equal(pedidosEnBloque(FECHA, orders, "18:45", "La Paz"), 1);
+  assert.equal(pedidosEnBloque(FECHA, orders, "18:45", "La Paz", 60), 3);
+  assert.equal(pedidosEnBloque(FECHA, orders, "18:00", "Loncoche"), 1);
 });
 
-test("un bloque lleno saca todas sus franjas, sin afectar a la otra sucursal", () => {
-  const orders = [pedido("18:00"), pedido("18:30")];
-  const laPaz = getHorariosDisponibles(FECHA, orders, SLOTS, 2, "La Paz", AHORA);
-  assert.deepEqual(laPaz, ["17:00", "17:15", "17:30", "17:45", "19:00", "19:15"]);
-  const loncoche = getHorariosDisponibles(FECHA, orders, SLOTS, 2, "Loncoche", AHORA);
-  assert.deepEqual(loncoche, SLOTS);
+test("un bloque lleno saca sus franjas, sin afectar a la otra sucursal", () => {
+  const orders = [pedido("18:00"), pedido("18:20")];
+  assert.deepEqual(getHorariosDisponibles(base({ orders, cupo: 2 })), ["17:00", "17:15", "17:30", "17:45", "18:30", "18:45", "19:00", "19:15"]);
+  assert.deepEqual(getHorariosDisponibles(base({ orders, cupo: 2, sucursal: "Loncoche" })), SLOTS);
+  // Con bloques de una hora, el bloque de las 18 sigue lleno.
+  assert.deepEqual(getHorariosDisponibles(base({ orders, cupo: 2, bloqueMinutos: 60 })), ["17:00", "17:15", "17:30", "17:45", "19:00", "19:15"]);
 });
 
-test("hoy se descartan las franjas a menos de 30 minutos", () => {
-  // 18:10 local del mismo día de FECHA.
+test("hoy se descartan las franjas antes del tiempo de preparación; la primera queda preseleccionada", () => {
   const ahora = new Date(`${FECHA}T18:10:00`);
-  const disp = getHorariosDisponibles(FECHA, [], SLOTS, 4, "La Paz", ahora);
-  assert.deepEqual(disp, ["18:45", "19:00", "19:15"]);
+  assert.deepEqual(getHorariosDisponibles(base({ orders: [], cupo: 4, ahora })), ["18:30", "18:45", "19:00", "19:15"]);
+  assert.deepEqual(getHorariosDisponibles(base({ orders: [], cupo: 4, ahora, preparacion: 40 })), ["19:00", "19:15"]);
 });
 
 test("proponerHorarios sugiere las siguientes franjas con cupo del mismo día", () => {
   const orders = [pedido("18:00"), pedido("18:15")];
-  assert.deepEqual(proponerHorarios(FECHA, orders, SLOTS, 2, "La Paz", "18:15", 3, AHORA), ["19:00", "19:15"]);
-  assert.deepEqual(proponerHorarios(FECHA, orders, SLOTS, 2, "La Paz", "17:15", 2, AHORA), ["17:30", "17:45"]);
-  assert.deepEqual(proponerHorarios(FECHA, orders, SLOTS, 2, "La Paz", "19:15", 3, AHORA), []);
+  assert.deepEqual(proponerHorarios(base({ orders, cupo: 2, desde: "18:15" })), ["18:30", "18:45", "19:00"]);
+  assert.deepEqual(proponerHorarios(base({ orders, cupo: 2, desde: "17:15", cantidad: 2 })), ["17:30", "17:45"]);
+  assert.deepEqual(proponerHorarios(base({ orders, cupo: 2, desde: "19:15" })), []);
 });
 
-test("cupoDe usa el cupo de la sucursal y 4 por defecto", () => {
-  const settings = { cupoPorHora: { "La Paz": 6, Loncoche: 3 } };
+test("cupoDe usa el cupo por bloque de la sucursal y 2 por defecto", () => {
+  const settings = { cupoPorBloque: { "La Paz": 6, Loncoche: 3 } };
   assert.equal(cupoDe(settings, "La Paz"), 6);
   assert.equal(cupoDe(settings, "Loncoche"), 3);
-  assert.equal(cupoDe(settings, "Otra"), 4);
-  assert.equal(cupoDe(undefined, "La Paz"), 4);
+  assert.equal(cupoDe(settings, "Otra"), 2);
+  assert.equal(cupoDe(null, "La Paz"), 2);
 });
 
 test("isoLocal usa la fecha local, no UTC (21:30 en Chile sigue siendo hoy)", () => {
@@ -83,45 +89,11 @@ test("sumarDias cruza meses y años", () => {
   assert.equal(sumarDias("2031-01-01", -1), "2030-12-31");
 });
 
-// ── Bloques de una hora para el cliente ──────────────────────────────────────
-const BASE = ["17:00", "17:15", "17:30", "17:45", "21:00", "21:15", "21:30", "21:45", "22:00"];
-
-test("rangoBloque: hora completa y último bloque corto", () => {
-  assert.equal(rangoBloque("17:00", BASE), "17:00 – 18:00");
-  assert.equal(rangoBloque("21:30", BASE), "21:00 – 22:00");
-  assert.equal(rangoBloque("22:00", BASE), "22:00");
-  assert.equal(rangoBloque("22:00", [...BASE, "22:15", "22:30"]), "22:00 – 22:30");
-  assert.equal(rangoBloque("20:15"), "20:00 – 21:00");
-});
-
-test("textoBloque: dentro de una frase", () => {
-  assert.equal(textoBloque("21:00", BASE), "entre 21:00 y 22:00");
-  assert.equal(textoBloque("22:00", BASE), "a las 22:00");
-});
-
-test("bloquesCliente: uno por hora, con la primera franja y el cupo del bloque", () => {
-  const slots = BASE.map((slot) => ({ slot, disponible: !slot.startsWith("21") }));
-  const b = bloquesCliente(FECHA, slots, AHORA);
-  assert.deepEqual(
-    b.map((x) => [x.slot, x.label, x.disponible]),
-    [
-      ["17:00", "17:00 – 18:00", true],
-      ["21:00", "21:00 – 22:00", false],
-      ["22:00", "22:00", true],
-    ]
-  );
-});
-
-test("bloquesCliente: oculta los bloques que empiezan en menos de 30 minutos", () => {
-  const slots = BASE.map((slot) => ({ slot, disponible: true }));
-  const ahora = new Date(2031, 2, 14, 20, 40); // 20:40 hora local de FECHA
-  assert.deepEqual(
-    bloquesCliente(FECHA, slots, ahora).map((x) => x.slot),
-    ["22:00"]
-  );
-  const temprano = new Date(2031, 2, 14, 20, 20);
-  assert.deepEqual(
-    bloquesCliente(FECHA, slots, temprano).map((x) => x.slot),
-    ["21:00", "22:00"]
-  );
+test("rangoBloque muestra el bloque completo y el último termina al cierre", () => {
+  assert.equal(rangoBloque("10:15"), "10:00 – 10:30");
+  assert.equal(rangoBloque("10:45", 60), "10:00 – 11:00");
+  const franjas = ["21:00", "21:15", "21:30", "21:45", "22:00"];
+  assert.equal(rangoBloque("21:30", 30, franjas), "21:30 – 22:00");
+  assert.equal(rangoBloque("22:00", 30, franjas), "22:00");
+  assert.equal(rangoBloque("21:00", 60, franjas), "21:00 – 22:00");
 });

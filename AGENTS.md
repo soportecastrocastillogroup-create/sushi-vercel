@@ -5,7 +5,7 @@ repositorio. **Léelo completo antes de cambiar código, base de datos o
 despliegues.** Actualízalo cuando cambie una decisión, una ruta, una tabla o el
 estado de una etapa.
 
-- Última actualización: 19 de octubre de 2026 (Etapa 1 del PRD 02).
+- Última actualización: 27 de octubre de 2026 (bloques de 30 minutos, hora aproximada y pagos, de la reunión del 26 oct).
 - Documento de producto vigente: [`agents/PRD/02-gestion-interna-y-pedidos-online.md`](agents/PRD/02-gestion-interna-y-pedidos-online.md)
   (fase 2). El anterior, [`01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md),
   queda como registro de la fase 1. Cada PRD tiene sus etapas, criterios de
@@ -163,7 +163,7 @@ src/
 | `/registro` | Público | `RegistroPage`: nombre, correo, contraseña, teléfono, dirección (opcional) y check de novedades; sin confirmar correo; muestra el correo en grande |
 | `/mi-cuenta` | Cliente | `MiCuentaPage`: pedidos y estado, datos (nombre, teléfono, dirección), consentimiento y contraseña |
 | `/panel` | Sesión y perfil activo | `PanelLayout` → redirige a `/panel/nuevo-pedido` |
-| `/panel/pedidos` | Ambos roles | `AdminView` heredado con `OrdersKanban`: un día y una sucursal, una columna por bloque de una hora con su ocupación; cambiar estado, abrir detalle (`OrderCard`) y mover de bloque (arrastrar o "⏰") |
+| `/panel/pedidos` | Ambos roles | `AdminView` heredado con `OrdersKanban`: un día y una sucursal, una columna por bloque (30 o 60 min, según la configuración) con su ocupación; cambiar estado, abrir detalle (`OrderCard`) y mover de bloque (arrastrar o "⏰") |
 | `/panel/nuevo-pedido` | Ambos roles | `CustomerView` heredado |
 | `/panel/cocina` | Ambos roles | `KitchenView` heredado |
 | `/panel/carta` | `administrador` | `CartaAdminPage` (productos y promos, categorías, extras) |
@@ -189,10 +189,14 @@ src/
 - **Pedido público [PRD 02 · Etapa 5]:** sin cuenta no hay carrito: cada
   producto se pide por WhatsApp y la carta invita a crear cuenta. Con cuenta
   (`useAuth().customer`), el `CartDrawer` pide **solo para hoy** (si hoy está
-  cerrado, avisa y deriva a WhatsApp), con bloques de una hora con cupo
-  (`available_slots`, agrupados con `bloquesCliente`), datos y pago, guarda el pedido con `create_order`
-  (origen `cuenta_web`) y ofrece enviar el resumen con el número por WhatsApp
-  (`buildAccountOrderMessage`).
+  cerrado, avisa y deriva a WhatsApp). Muestra los bloques que no han pasado
+  (`available_blocks`) con el primero con cupo preseleccionado y la hora: "aprox.
+  a las 18:35" (ahora + tiempo de preparación, si cae en ese bloque) o "para las
+  20:00" (un bloque más tarde). La hora la pone la base. Pago: efectivo, débito o
+  transferencia. Guarda con `create_order` (origen `cuenta_web`) y **abre WhatsApp
+  solo** con el resumen (la ventana se abre dentro del toque; queda el botón por
+  si el navegador la bloquea). Los links de WhatsApp van a `api.whatsapp.com/send`:
+  la redirección de `wa.me` rompe los emojis.
 
 ### Convenciones de código
 
@@ -231,6 +235,7 @@ Desarrollo**:
 | `20261020020000_customer_accounts.sql` | PRD 02 · Etapa 5: `customers` (ficha por correo; la crea el trigger `on_auth_user_created_customer` cuando el registro trae `tipo = 'cliente'` y se enlaza a una ficha previa), `orders.customer_id` y `cliente_email`, `my_customer_id()`, `update_my_customer()`, `available_slots()`; RLS (cliente: su ficha y sus pedidos; administrador: todas las fichas; colaborador y anon: ninguna); lectura de `product_stock` y `unlocked_dates` para `authenticated`; `create_order` acepta clientes con reglas estrictas (errores `SL409`, `SL422`, `SL429`) |
 | `20261020030000_customer_stats.sql` | PRD 02 · Etapa 6 (primera parte): vista `customer_stats` (`security_invoker`): compras, gasto, ticket promedio, primera y última compra y pedidos en curso por Sushero |
 | `20261026120000_customer_orders_today.sql` | `create_order`: el pedido de un cliente es solo para hoy (antes, hasta 6 días); el personal puede seguir cargando otros días |
+| `20261027120000_half_hour_blocks.sql` | Reunión del 26 oct: `app_settings.bloque_minutos` (30 o 60) y `minutos_preparacion` (20); `branches.cupo_por_hora` → `cupo_por_bloque` (dividido por 2); `bloque_inicio()` reemplaza a `hora_bloque()`; `minutos()`, `hhmm()`, `hora_estimada_min()`; `available_blocks()` reemplaza a `available_slots()`; `create_order` cuenta el cupo por bloque, pone la hora del pedido del cliente y acepta `efectivo`, `debito` y `transferencia` (también en delivery); `SL409` con `detail` `{bloque, pedidos, cupo}`; caja separa efectivo y débito (`cash_closings.diferencia_tarjetas`; `pago_contra_entrega` anterior cuenta como efectivo) |
 
 ### Datos clave
 
@@ -243,13 +248,22 @@ Desarrollo**:
   el catálogo (Etapa 5).
 - `orders.order_number` usa `get_next_order_number()`, que solo se llama desde
   `create_order()`.
-- **Cupo por hora [PRD 02 · Etapa 2]:** `branches.cupo_por_hora` (editable en
-  `/panel/sitio` → Locales). El bloque es la hora completa (20:00–20:59) en esa
-  sucursal y cuentan todos los pedidos, también los completados. Lo valida
-  `create_order()`; el panel puede pasarse con confirmación (`p_forzar`), hoy
-  ambos roles [Por confirmar con el cliente si el colaborador también].
-  En el frontend: `cupoDe`, `pedidosEnHora`, `getHorariosDisponibles` y
-  `proponerHorarios` en `utils/dates.js`; `settings.cupoPorHora` por sucursal. `order_items` guarda una
+- **Cupo por bloque [reunión del 26 oct 2026]:** `branches.cupo_por_bloque`
+  (editable en `/panel/sitio` → Locales). La duración del bloque
+  (`app_settings.bloque_minutos`, 30 o 60) y el tiempo de preparación
+  (`minutos_preparacion`) se editan en Sitio → Datos del negocio; las horas de
+  trabajo son las franjas de `time_slots` (de la primera a la última). Cuentan
+  todos los pedidos del bloque en esa sucursal, también los completados. Lo
+  valida `create_order()`; el panel puede pasarse con confirmación (`p_forzar`),
+  hoy ambos roles [Por confirmar con el cliente si el colaborador también].
+  Los pedidos guardan la hora real (p. ej. 18:35). En el frontend: `bloqueDe`,
+  `pedidosEnBloque`, `cupoDe`, `getHorariosDisponibles` y `proponerHorarios` en
+  `utils/dates.js`; `settings.cupoPorBloque`, `bloqueMinutos` y
+  `minutosPreparacion`. En el panel, el horario preseleccionado es la primera
+  franja con cupo desde ahora + preparación.
+- **Pago:** `efectivo`, `debito` o `transferencia` (`PAGOS` y `pagoLabel` en
+  `constants/estados.js`). `pago_contra_entrega` queda solo en pedidos
+  anteriores. `order_items` guarda una
   copia del nombre y el precio, y `product_id` **no tiene FK**. Borrar un
   producto no rompe el historial.
 - Las sucursales se identifican por `branches.name` en los pedidos
