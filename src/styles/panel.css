@@ -1111,6 +1111,33 @@
   gap: 12px;
   align-items: start;
 }
+/* Con pedidos sin hora: bloques a la izquierda y el panel "Sin hora" al lado. */
+.kanban__layout.has-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  align-items: start;
+}
+.kanban__side {
+  position: sticky;
+  top: 84px;
+  max-height: calc(100vh - 110px);
+  border-style: dashed;
+}
+.kanban__side-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.kanban__side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .kanban__col {
   display: flex;
   flex-direction: column;
@@ -1251,6 +1278,15 @@
 @media (max-width: 760px) {
   .kanban__cols {
     grid-template-columns: 1fr;
+  }
+  /* En móvil, "Sin hora" va arriba de los bloques, con scroll propio. */
+  .kanban__layout.has-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .kanban__side {
+    position: static;
+    order: -1;
+    max-height: 50vh;
   }
   .kanban__cupo {
     margin-left: 0;

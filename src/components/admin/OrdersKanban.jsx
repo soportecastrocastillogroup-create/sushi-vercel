@@ -27,10 +27,12 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
   const bloqueDeOrden = (o) => bloqueDe(o.horario, min);
   const rango = (h) => (h ? rangoBloque(h, min, settings.timeSlots) : "Sin hora");
   const delDia = orders.filter((o) => o.fecha === fecha && o.sucursal === sucursal);
-  // Los pedidos antiguos sin hora (bloque "") van en una columna al final.
   const bloques = [...new Set([...bloquesDe(settings.timeSlots, min), ...delDia.map(bloqueDeOrden)])]
-    .sort()
-    .sort((a, b) => (a === "") - (b === ""));
+    .filter(Boolean)
+    .sort();
+  // Los pedidos antiguos sin hora (bloque "") van en un panel al lado, que
+  // solo aparece si hay alguno.
+  const sinHora = delDia.filter((o) => !bloqueDeOrden(o)).sort((x, y) => new Date(x.timestamp) - new Date(y.timestamp));
   const detalle = orders.find((o) => o.id === detalleId);
 
   const stats = {
@@ -40,8 +42,24 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
     listos: delDia.filter((o) => o.estado === "listo").length,
   };
 
+  const tarjeta = (o) => (
+    <KanbanCard
+      key={o.id}
+      order={o}
+      settings={settings}
+      onOpen={() => setDetalleId(o.id)}
+      onStatusChange={onStatusChange}
+      onChangeHora={(h) => cambiarHora(o, h)}
+      onDragStart={() => setArrastrando(o.id)}
+      onDragEnd={() => {
+        setArrastrando(null);
+        setDestino(null);
+      }}
+    />
+  );
+
   const mover = (order, bloque) => {
-    if (!bloque || bloqueDeOrden(order) === bloque) return;
+    if (bloqueDeOrden(order) === bloque) return;
     const ocupados = pedidosEnBloque(order.fecha, orders, bloque, order.sucursal, min);
     if (ocupados >= cupo && !window.confirm(`El bloque ${rango(bloque)} está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
     onUpdateOrder(order.id, { ...order, horario: horaEnBloque(bloque, order.horario, min) });
@@ -98,18 +116,19 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
         ))}
       </div>
 
+      <div className={`kanban__layout ${sinHora.length ? "has-side" : ""}`}>
       <div className="kanban__cols">
         {bloques.map((b) => {
           const pedidos = delDia
             .filter((o) => bloqueDeOrden(o) === b)
             .sort((x, y) => x.horario.localeCompare(y.horario) || new Date(x.timestamp) - new Date(y.timestamp));
-          const estadoCol = !b ? "" : pedidos.length > cupo ? "is-over" : pedidos.length === cupo ? "is-full" : "";
+          const estadoCol = pedidos.length > cupo ? "is-over" : pedidos.length === cupo ? "is-full" : "";
           return (
             <section
               key={b}
               className={`kanban__col ${estadoCol} ${destino === b ? "is-target" : ""}`}
               onDragOver={(e) => {
-                if (!arrastrando || !b) return;
+                if (!arrastrando) return;
                 e.preventDefault();
                 setDestino(b);
               }}
@@ -125,30 +144,27 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
               <header className="kanban__col-head">
                 <h3>{rango(b)}</h3>
                 <span className="kanban__occ">
-                  {pedidos.length}
-                  {b && ` / ${cupo}`}
+                  {pedidos.length} / {cupo}
                   {estadoCol && <em>{estadoCol === "is-over" ? " · sobrecupo" : " · lleno"}</em>}
                 </span>
               </header>
               {pedidos.length === 0 && <p className="kanban__empty">Sin pedidos</p>}
-              {pedidos.map((o) => (
-                <KanbanCard
-                  key={o.id}
-                  order={o}
-                  settings={settings}
-                  onOpen={() => setDetalleId(o.id)}
-                  onStatusChange={onStatusChange}
-                  onChangeHora={(h) => cambiarHora(o, h)}
-                  onDragStart={() => setArrastrando(o.id)}
-                  onDragEnd={() => {
-                    setArrastrando(null);
-                    setDestino(null);
-                  }}
-                />
-              ))}
+              {pedidos.map(tarjeta)}
             </section>
           );
         })}
+      </div>
+
+      {sinHora.length > 0 && (
+        <aside className="kanban__col kanban__side" aria-label="Pedidos sin hora">
+          <header className="kanban__col-head">
+            <h3>Sin hora</h3>
+            <span className="kanban__occ">{sinHora.length}</span>
+          </header>
+          <p className="kanban__side-hint">Pedidos anteriores sin horario. Arrástralos a un bloque o elige la hora con ⏰.</p>
+          <div className="kanban__side-list">{sinHora.map(tarjeta)}</div>
+        </aside>
+      )}
       </div>
 
       {detalle && (

@@ -240,7 +240,7 @@ Desarrollo**:
 | `20261026120000_customer_orders_today.sql` | `create_order`: el pedido de un cliente es solo para hoy (antes, hasta 6 días); el personal puede seguir cargando otros días |
 | `20261027120000_half_hour_blocks.sql` | Reunión del 26 oct: `app_settings.bloque_minutos` (30 o 60) y `minutos_preparacion` (20); `branches.cupo_por_hora` → `cupo_por_bloque` (dividido por 2); `bloque_inicio()` reemplaza a `hora_bloque()`; `minutos()`, `hhmm()`, `hora_estimada_min()`; `available_blocks()` reemplaza a `available_slots()`; `create_order` cuenta el cupo por bloque, pone la hora del pedido del cliente y acepta `efectivo`, `debito` y `transferencia` (también en delivery); `SL409` con `detail` `{bloque, pedidos, cupo}`; caja separa efectivo y débito (`cash_closings.diferencia_tarjetas`; `pago_contra_entrega` anterior cuenta como efectivo) |
 | `20261027200000_manual_rider_payment.sql` | `save_cash_closing` acepta `pago_repartidor` manual y lo guarda en `total_repartidor` (si no viene, deliveries × tarifa) |
-| `20261103120000_orders_sin_hora.sql` | `minutos()` devuelve NULL si el horario no es "HH:MM": los pedidos antiguos sin hora (`horario = ''`, 345 en producción) no rompen `available_blocks()` ni `create_order()` y no cuentan para el cupo. El kanban los muestra en "Sin hora" |
+| `20261103120000_orders_sin_hora.sql` | `minutos()` devuelve NULL si el horario no es "HH:MM": los pedidos antiguos sin hora (`horario = ''`, 345 en producción) no rompen `available_blocks()` ni `create_order()` y no cuentan para el cupo. El kanban los muestra en un panel lateral "Sin hora" (solo si hay) |
 
 ### Datos clave
 
