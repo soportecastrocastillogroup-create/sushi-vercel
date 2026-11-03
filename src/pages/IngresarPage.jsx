@@ -21,6 +21,10 @@ export default function IngresarPage() {
   if (!auth.loading && auth.customer) {
     return <Navigate to={location.state?.from ?? "/carta"} replace />;
   }
+  // Una cuenta del equipo entra directo al panel, sin un paso extra.
+  if (!auth.loading && auth.session && !auth.customer && auth.profile?.active) {
+    return <Navigate to="/panel" replace />;
+  }
   const staffOnly = !auth.loading && auth.session && !auth.customer;
 
   const submit = async (e) => {
@@ -49,12 +53,7 @@ export default function IngresarPage() {
 
         {staffOnly ? (
           <div className="login__alert" role="alert">
-            <p>Esta es una cuenta del equipo, no de cliente.</p>
-            {auth.profile?.active && (
-              <Link to="/panel" className="btn btn--primary btn--block">
-                Ir al panel
-              </Link>
-            )}
+            <p>Esta es una cuenta del equipo sin acceso al panel o desactivada.</p>
             <button type="button" className="btn btn--ghost btn--block" onClick={auth.signOut}>
               Cerrar sesión
             </button>

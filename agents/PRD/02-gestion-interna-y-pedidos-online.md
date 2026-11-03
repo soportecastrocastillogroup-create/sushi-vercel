@@ -18,12 +18,12 @@ Convención del documento: **[Verificado]** = comprobado en código, base de dat
 
 ---
 
-## 0. Dónde estamos (20 de octubre de 2026)
+## 0. Dónde estamos (3 de noviembre de 2026)
 
-**Resumen:** todo lo construido está en la rama `fase-2` (solo local) y
-aplicado únicamente en **Pedidos Desarrollo**. Producción (`Pedidos`) y `main`
-no se han tocado: el sitio en <https://www.sushiloncoche.cl/> sigue siendo el de
-la fase 1. Cómo se hizo cada cosa está en la sección 10.
+**Resumen:** las Etapas 0 a 5 y la primera parte de la 6 están **publicadas en
+producción** desde el 3 nov 2026 (PR #3, merge `c3c6477`; migraciones hasta
+`20261103120000`; `manage-customers` desplegada). Cómo se hizo cada cosa está
+en la sección 10 y la publicación en la bitácora.
 
 | Etapa | Estado | Commit |
 |---|---|---|
@@ -36,7 +36,7 @@ la fase 1. Cómo se hizo cada cosa está en la sección 10.
 | 6 · Susheros | 🟡 A medias: lista y ficha con pedidos y acciones de cuenta listas; faltan segmentos, CSV y correo opcional en los pedidos del panel | `2344f49` |
 | 7 · Dashboard | ⏳ Pendiente | |
 | 8 · Cierre de cocina | ⏳ Pendiente | |
-| Publicación en producción | ⏳ Pendiente (pasos en la sección 10.10) | |
+| Publicación en producción | ✅ Hecha el 3 nov 2026 (sección 10.10 y bitácora) | `c3c6477` |
 
 **Estado de las pruebas al último commit:** `npm run lint` y `npm run build`
 pasan; `npm test` 11 de 11; `npm run test:db` 44 de 44 contra Pedidos
@@ -749,9 +749,9 @@ detalle día a día está en la bitácora (sección 11).
   desarrollo la secuencia ya pasó del #100.
 - Para correrlas hacen falta `.env.local` y `credenciales-prueba.local`.
 
-### 10.10 Cómo publicar (pendiente, con autorización)
+### 10.10 Cómo publicar (hecho el 3 nov 2026)
 
-Nada de esto está en producción. Cuando se decida publicar:
+Pasos que se siguieron (sirven para las próximas publicaciones):
 
 1. Respaldo de la base de producción (`Pedidos`).
 2. En Auth de producción: "Allow new users to sign up" **activado** y
@@ -833,3 +833,5 @@ Nada de esto está en producción. Cuando se decida publicar:
 | 27 oct 2026 | Bruno Veinz (pedido) · Agente | **Avisos que se cierran:** nuevo componente `Aviso` (`panel/ui.jsx`) con botón ✕; queda cerrado en la sesión mientras su contenido no cambie (si cambia, p. ej. otra cantidad de pendientes u otro insumo crítico, vuelve a aparecer). Reemplaza los cuatro avisos: "pedidos activos — revisar insumos" (Pedidos), "pedidos sin completar" y "los pedidos cambiaron después del cierre" (Caja) e "insumos críticos" (Inventario, en rojo). **Caja más grande:** ancho completo (`panel-page--wide`), textos y montos más grandes, panel lateral de 420 px. **Muchos pedidos:** la lista del panel lateral tiene scroll propio (en escritorio no pasa del alto de la pantalla; en móvil, máximo 60 % de la pantalla). Verificado en navegador: el aviso se cerró y siguió cerrado al recargar; con la ventana baja, la lista mostró 220 px de 536 con scroll interno; 390 px sin scroll horizontal ni errores |
 | 27 oct 2026 | Bruno Veinz (hallazgo) · Agente | **Caja calculaba mal** (captura de Bruno: "debería haber $10 + $50.000 − $12"): los campos de dinero eran `type="number"` y el navegador lee el punto como decimal, así que "10.000" quedaba en 10. Ahora el campo `Monto` de Caja es texto con teclado numérico: guarda solo los dígitos y muestra "$10.000" mientras se escribe. Verificado escribiendo con puntos: fondo $10.000, repartidor $12.000 y $40.000 contado → debería haber $48.000, falta $8.000. **Pendiente:** el mismo problema existe en los precios de la Carta, el costo de delivery y la tarifa del repartidor en Sitio (`type="number"`; "6.990" se leería como 6,99) |
 | 3 nov 2026 | Bruno Veinz (autorización: solo lectura) · Agente | **Revisión de producción antes de publicar** (consultas `db query --read-only`, sin datos personales). (1) **Sin historial de migraciones:** no existe `supabase_migrations.schema_migrations`, aunque el esquema de las 4 migraciones de la fase 1 sí está (se aplicaron a mano). Un `db push` directo volvería a correr el seed de `initial_schema` y **sobrescribiría la carta**; hay que marcarlas antes con `migration repair` (ver 10.10). (2) **345 pedidos presenciales con `horario = ''`** (hasta el 1 nov): `minutos('')` fallaba y con él `available_blocks()` y `create_order()` para esa sucursal y día. Corregido con `20261103120000_orders_sin_hora.sql` (aplicada en desarrollo): `minutos()` devuelve NULL si no es "HH:MM", el pedido no cuenta para el cupo; el kanban los muestra en un **panel lateral "Sin hora"** con scroll propio, que solo aparece si hay alguno (en móvil va arriba de los bloques, con un máximo de media pantalla). Prueba de integración que reproducía el error y ahora pasa, y una unitaria; 15 unitarias y el resto de integración pasan (customers no corre después de las 23:00), `lint` y `build` pasan; navegador no probado. (3) **Cupo:** `max_por_horario` = 4 → quedaría `cupo_por_bloque` = 2; en los últimos 30 días Loncoche tuvo mediana 2, p90 4 y máximo 7 por bloque de 30 min (66 de 150 bloques sobre 2); La Paz, máximo 3. Hay que definir el cupo de Loncoche con el cliente. (4) Datos: 2.240 pedidos desde el 17 jun, 69 productos, 2 cuentas del personal; franjas 17:00–21:30 (la migración agrega 21:45 y 22:00); días cerrados 0,1,2 pero los domingos se abre (115 pedidos en 60 días); 49 % `pago_contra_entrega`. Con la Etapa 1 el frontend actual de `main` deja de crear pedidos: migraciones y merge en la misma sesión, con el local cerrado |
+| 3 nov 2026 | Bruno Veinz (autorización) · Agente | **Fase 2 publicada en producción.** (1) Respaldo con `db dump --remote` (roles, esquema y datos) en `../respaldos-produccion/2026-11-03-antes-fase-2/`, fuera del repositorio. (2) Ensayo: el respaldo se restauró en un Supabase local y se aplicaron las migraciones; sin `repair` se habrían corrido las 15 (incluido el seed de la carta); con `repair`, las 11 correctas. Hash de todas las tablas igual antes y después, salvo `app_settings` (se quitan PIN y `max_por_horario`) y `time_slots` (+21:45 y 22:00); `available_blocks` funciona en un día real con pedidos sin hora; `create_order` como administrador da `#2434` (revertido); `anon` ve 0 pedidos. (3) Bruno activó "Allow new users to sign up" y desactivó "Confirm email" en Auth de producción. (4) En producción: `migration repair` de las 4 de la fase 1, `db push --dry-run` (11), `db push` sin errores. Verificado: 2.240 pedidos, 3.129 ítems, 69 productos con el mismo hash que el respaldo, 2 cuentas del personal, 26 archivos; `anon` lee la carta y ve 0 pedidos. (5) Merge del PR #3 (`c3c6477`, sin Preview: `fase-2` sigue bloqueada en `vercel.json`); el sitio sirve la versión nueva y portada, carta, locales, registro y login cargan sin errores. (6) `manage-customers` desplegada por Bruno (el agente no tuvo permiso); activa y responde 401 sin sesión de administrador. **Pendiente:** cupo por bloque de Loncoche (quedó en 2), revisar franjas 21:45 y 22:00, pedido de prueba del panel y uno con cuenta de cliente con el local abierto |
+| 3 nov 2026 | Bruno Veinz (pedido) · Agente | Tres ajustes de interfaz tras la publicación: (1) **Foto del hero** con bordes difuminados (máscara de dos degradados que se intersectan) y `object-fit: cover`, para que cualquier foto se funda con el fondo sin cantos duros. (2) **Logo** (`BrandMark`): los palillos se cruzan levemente cerca del extremo inferior. (3) **Login:** una cuenta del equipo que entra por `/ingresar` va **directo al panel** (antes mostraba un botón "Ir al panel"); el aviso queda solo para cuentas desactivadas. Verificado en el navegador a 1440 px y 390 px con la foto real de producción puesta temporalmente en el slide 1 de desarrollo (revertida después); lint y build pasan |
