@@ -25,9 +25,12 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
   const cupo = cupoDe(settings, sucursal);
   const min = settings.bloqueMinutos ?? 30;
   const bloqueDeOrden = (o) => bloqueDe(o.horario, min);
-  const rango = (h) => rangoBloque(h, min, settings.timeSlots);
+  const rango = (h) => (h ? rangoBloque(h, min, settings.timeSlots) : "Sin hora");
   const delDia = orders.filter((o) => o.fecha === fecha && o.sucursal === sucursal);
-  const bloques = [...new Set([...bloquesDe(settings.timeSlots, min), ...delDia.map(bloqueDeOrden)])].sort();
+  // Los pedidos antiguos sin hora (bloque "") van en una columna al final.
+  const bloques = [...new Set([...bloquesDe(settings.timeSlots, min), ...delDia.map(bloqueDeOrden)])]
+    .sort()
+    .sort((a, b) => (a === "") - (b === ""));
   const detalle = orders.find((o) => o.id === detalleId);
 
   const stats = {
@@ -38,7 +41,7 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
   };
 
   const mover = (order, bloque) => {
-    if (bloqueDeOrden(order) === bloque) return;
+    if (!bloque || bloqueDeOrden(order) === bloque) return;
     const ocupados = pedidosEnBloque(order.fecha, orders, bloque, order.sucursal, min);
     if (ocupados >= cupo && !window.confirm(`El bloque ${rango(bloque)} está lleno (${ocupados}/${cupo}). ¿Mover igual?`)) return;
     onUpdateOrder(order.id, { ...order, horario: horaEnBloque(bloque, order.horario, min) });
@@ -100,13 +103,13 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
           const pedidos = delDia
             .filter((o) => bloqueDeOrden(o) === b)
             .sort((x, y) => x.horario.localeCompare(y.horario) || new Date(x.timestamp) - new Date(y.timestamp));
-          const estadoCol = pedidos.length > cupo ? "is-over" : pedidos.length === cupo ? "is-full" : "";
+          const estadoCol = !b ? "" : pedidos.length > cupo ? "is-over" : pedidos.length === cupo ? "is-full" : "";
           return (
             <section
               key={b}
               className={`kanban__col ${estadoCol} ${destino === b ? "is-target" : ""}`}
               onDragOver={(e) => {
-                if (!arrastrando) return;
+                if (!arrastrando || !b) return;
                 e.preventDefault();
                 setDestino(b);
               }}
@@ -122,7 +125,8 @@ export default function OrdersKanban({ orders, settings, branches, onStatusChang
               <header className="kanban__col-head">
                 <h3>{rango(b)}</h3>
                 <span className="kanban__occ">
-                  {pedidos.length} / {cupo}
+                  {pedidos.length}
+                  {b && ` / ${cupo}`}
                   {estadoCol && <em>{estadoCol === "is-over" ? " · sobrecupo" : " · lleno"}</em>}
                 </span>
               </header>
@@ -190,7 +194,7 @@ function KanbanCard({ order, settings, onOpen, onStatusChange, onChangeHora, onD
       <button type="button" className="kcard__main" onClick={onOpen}>
         <span className="kcard__top">
           <b>{order.orderId}</b>
-          <span>{order.horario}</span>
+          <span>{order.horario || "Sin hora"}</span>
           <span className="kcard__estado" style={{ background: estado.bg, color: estado.color }}>
             {etiqueta(order.estado)}
           </span>
@@ -219,7 +223,7 @@ function KanbanCard({ order, settings, onOpen, onStatusChange, onChangeHora, onD
         <select value={order.horario} onChange={(e) => onChangeHora(e.target.value)} aria-label={`Cambiar hora de ${order.orderId}`}>
           {horas.map((h) => (
             <option key={h} value={h}>
-              ⏰ {h}
+              ⏰ {h || "Sin hora"}
             </option>
           ))}
         </select>

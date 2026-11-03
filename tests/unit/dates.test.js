@@ -35,6 +35,13 @@ test("bloqueDe agrupa por bloques de 30 o 60 minutos", () => {
   assert.equal(hhmm(1115), "18:35");
 });
 
+test("los pedidos antiguos sin hora no tienen bloque ni cuentan para el cupo", () => {
+  assert.equal(bloqueDe(""), "");
+  assert.equal(bloqueDe(null), "");
+  assert.equal(pedidosEnBloque(FECHA, [pedido(""), pedido("00:10"), pedido("18:00")], "18:00", "La Paz"), 1);
+  assert.equal(pedidosEnBloque(FECHA, [pedido("")], "00:00", "La Paz"), 0);
+});
+
 test("pedidosEnBloque cuenta el bloque de esa sucursal, incluidos los completados y las horas reales", () => {
   const orders = [
     pedido("18:00"),

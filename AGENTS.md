@@ -5,7 +5,7 @@ repositorio. **Léelo completo antes de cambiar código, base de datos o
 despliegues.** Actualízalo cuando cambie una decisión, una ruta, una tabla o el
 estado de una etapa.
 
-- Última actualización: 27 de octubre de 2026 (bloques de 30 minutos, hora aproximada y pagos, de la reunión del 26 oct).
+- Última actualización: 3 de noviembre de 2026 (revisión de producción antes de publicar y pedidos sin hora).
 - Documento de producto vigente: [`agents/PRD/02-gestion-interna-y-pedidos-online.md`](agents/PRD/02-gestion-interna-y-pedidos-online.md)
   (fase 2). El anterior, [`01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md),
   queda como registro de la fase 1. Cada PRD tiene sus etapas, criterios de
@@ -107,6 +107,9 @@ con Chrome o Brave, instalado en el scratchpad, no en el repositorio).
 
 - `.env.local` (ignorado por Git) apunta a **Pedidos Desarrollo**. Variables:
   `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (Vite, no `NEXT_PUBLIC_*`).
+- **Producción no tiene historial de migraciones** (verificado el 3 nov 2026):
+  la fase 1 se aplicó a mano. Antes del primer `db push` hay que hacer
+  `migration repair` de las 4 de la fase 1 (PRD 02, sección 10.10).
 - Supabase CLI (`npx supabase`, v2.117) está **enlazado solo con Pedidos
   Desarrollo** (`supabase/.temp/project-ref`). Antes de cualquier `db push` o
   `functions deploy`, confirmar con `npx supabase projects list` que
@@ -236,6 +239,8 @@ Desarrollo**:
 | `20261020030000_customer_stats.sql` | PRD 02 · Etapa 6 (primera parte): vista `customer_stats` (`security_invoker`): compras, gasto, ticket promedio, primera y última compra y pedidos en curso por Sushero |
 | `20261026120000_customer_orders_today.sql` | `create_order`: el pedido de un cliente es solo para hoy (antes, hasta 6 días); el personal puede seguir cargando otros días |
 | `20261027120000_half_hour_blocks.sql` | Reunión del 26 oct: `app_settings.bloque_minutos` (30 o 60) y `minutos_preparacion` (20); `branches.cupo_por_hora` → `cupo_por_bloque` (dividido por 2); `bloque_inicio()` reemplaza a `hora_bloque()`; `minutos()`, `hhmm()`, `hora_estimada_min()`; `available_blocks()` reemplaza a `available_slots()`; `create_order` cuenta el cupo por bloque, pone la hora del pedido del cliente y acepta `efectivo`, `debito` y `transferencia` (también en delivery); `SL409` con `detail` `{bloque, pedidos, cupo}`; caja separa efectivo y débito (`cash_closings.diferencia_tarjetas`; `pago_contra_entrega` anterior cuenta como efectivo) |
+| `20261027200000_manual_rider_payment.sql` | `save_cash_closing` acepta `pago_repartidor` manual y lo guarda en `total_repartidor` (si no viene, deliveries × tarifa) |
+| `20261103120000_orders_sin_hora.sql` | `minutos()` devuelve NULL si el horario no es "HH:MM": los pedidos antiguos sin hora (`horario = ''`, 345 en producción) no rompen `available_blocks()` ni `create_order()` y no cuentan para el cupo. El kanban los muestra en "Sin hora" |
 
 ### Datos clave
 

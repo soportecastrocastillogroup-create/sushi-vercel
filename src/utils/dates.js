@@ -65,8 +65,9 @@ export const minutosDe = (horario) => {
 export const hhmm = (minutos) =>
   `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
 
+// Los pedidos antiguos sin hora (horario "") no tienen bloque: devuelve "".
 export const bloqueDe = (horario, bloqueMinutos = 30) =>
-  hhmm(Math.floor(minutosDe(horario) / bloqueMinutos) * bloqueMinutos);
+  /^\d{1,2}:\d{2}$/.test(horario ?? "") ? hhmm(Math.floor(minutosDe(horario) / bloqueMinutos) * bloqueMinutos) : "";
 
 export const cupoDe = (settings, sucursal) => settings?.cupoPorBloque?.[sucursal] ?? 2;
 

@@ -189,6 +189,22 @@ describe("Cupo por bloque de 30 minutos y por sucursal", () => {
     assert.equal((await crear(colab, pedido("La Paz", "20:15"))).error?.code, "SL409");
   });
 
+  // En producción hay pedidos presenciales antiguos con horario = ''.
+  test("un pedido antiguo sin hora no rompe create_order ni available_blocks", async () => {
+    await setCupo("Loncoche", 2);
+    const viejo = await crear(colab, pedido("Loncoche", "18:00"));
+    assert.ifError(viejo.error);
+    const { error: upErr } = await colab.from("orders").update({ horario: "" }).eq("id", viejo.data.id);
+    assert.ifError(upErr);
+
+    const bloques = await colab.rpc("available_blocks", { p_sucursal: "Loncoche", p_fecha: FECHA });
+    assert.ifError(bloques.error);
+    // El pedido sin hora no ocupa el bloque de las 18:00.
+    assert.ifError((await crear(colab, pedido("Loncoche", "18:00"))).error);
+    assert.ifError((await crear(colab, pedido("Loncoche", "18:10"))).error);
+    assert.equal((await crear(colab, pedido("Loncoche", "18:20"))).error?.code, "SL409");
+  });
+
   test("pedidos simultáneos al último cupo: entra solo uno", async () => {
     await setCupo("Loncoche", 2);
     assert.ifError((await crear(colab, pedido("Loncoche", "19:00"))).error);
