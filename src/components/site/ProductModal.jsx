@@ -3,7 +3,7 @@ import { fmt } from "../../utils/format.js";
 import { CloseIcon } from "./Icons.jsx";
 import ProductArt from "./ProductArt.jsx";
 
-export default function ProductModal({ product, onClose, onAdd }) {
+export default function ProductModal({ product, onClose, onAdd, actionLabel = "Agregar" }) {
   const [qty, setQty] = useState(1);
   const [choices, setChoices] = useState(() => (product.opciones || []).map((o) => o.choices[0]));
 
@@ -79,7 +79,7 @@ export default function ProductModal({ product, onClose, onAdd }) {
               </button>
             </div>
             <button type="button" className="btn btn--primary btn--block" onClick={confirm}>
-              Agregar {fmt(product.precio * qty)}
+              {actionLabel} {fmt(product.precio * qty)}
             </button>
           </div>
         </div>

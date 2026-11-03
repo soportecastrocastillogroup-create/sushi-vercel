@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { fmt } from "../../utils/format.js";
 import { cambiosCosto, cartSubtotal, cartTotal } from "../../utils/cart.js";
-import { getFechasDisponibles, getHorariosDisponibles, formatFecha } from "../../utils/dates.js";
+import { getFechasDisponibles, getHorariosDisponibles, pedidosEnBloque, proponerHorarios, cupoDe, formatFecha, rangoBloque } from "../../utils/dates.js";
+import { cupoLleno } from "../../services/orders.js";
 import { emptyForm } from "../../utils/orders.js";
-import { getPagos } from "../../constants/estados.js";
+import { getPagos, pagoLabel } from "../../constants/estados.js";
 
 import ProductSelector from "./ProductSelector.jsx";
 import { buildComandaData, ComandaPreview, printComanda } from "../shared/Comanda.jsx";
@@ -17,6 +18,7 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
   const [mostrarOtrasFechas,setMostrarOtrasFechas] = useState(false);
   const [submitting,setSubmitting]     = useState(false);
   const [submitError,setSubmitError]   = useState("");
+  const [cupoError,setCupoError]       = useState(null);
 
   const sub   = cartSubtotal(form.cart);
   const tot   = cartTotal(form.cart,form.tipo,settings.costoDelivery);
@@ -25,11 +27,14 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
 
   const todasFechas = getFechasDisponibles(diasDesbloqueados, settings.blockedWeekdays);
   const fechas = todasFechas.filter(f=>!f.bloqueado);
-  const horariosDisp = getHorariosDisponibles(form.fecha, orders, settings.timeSlots, settings.maxPorHorario);
-  const horarioActivo = form.horario || horariosDisp[0] || "";
+  const cupo = cupoDe(settings, form.sucursal);
+  // Opciones de cupo comunes; la primera franja disponible queda preseleccionada.
+  const opcionesCupo = { orders, timeSlots:settings.timeSlots, cupo, sucursal:form.sucursal, bloqueMinutos:settings.bloqueMinutos, preparacion:settings.minutosPreparacion };
+  const horariosDisp = getHorariosDisponibles({ ...opcionesCupo, fecha:form.fecha });
+  const horarioActivo = horariosDisp.includes(form.horario) ? form.horario : horariosDisp[0] || "";
 
   const handleFechaChange = (f) => {
-    const disp = getHorariosDisponibles(f, orders, settings.timeSlots, settings.maxPorHorario);
+    const disp = getHorariosDisponibles({ ...opcionesCupo, fecha:f });
     setForm(prev=>({...prev, fecha:f, horario: disp[0]||""}));
   };
 
@@ -49,16 +54,22 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
     return true;
   };
 
-  const handleSubmit = async ()=>{
+  const handleSubmit = async ({ forzar = false } = {})=>{
     if(submitting) return;
 
     setSubmitting(true);
     setSubmitError("");
+    setCupoError(null);
     try {
       const order={...form, horario: horarioActivo, items:form.cart, estado:"abierto", fuente:"web", timestamp:new Date().toISOString()};
-      const created = await onAddOrder(order);
+      const created = await onAddOrder(order, { forzar });
       setLastOrder(created);
     } catch (error) {
+      const lleno = cupoLleno(error);
+      if (lleno) {
+        setCupoError({ ...lleno, propuestas: proponerHorarios({ ...opcionesCupo, fecha:form.fecha, desde:horarioActivo }) });
+        return;
+      }
       setSubmitError(error?.code === "23505"
         ? "No pudimos generar el numero de pedido. Intenta nuevamente en un momento."
         : "No pudimos enviar tu pedido. Revisa tu conexion e intenta nuevamente.");
@@ -70,7 +81,7 @@ export default function CustomerView({ onAddOrder, stock, orders, diasDesbloquea
   // ── SUCCESS SCREEN ──────────────────────────────────────────────────────────
   if(lastOrder){
     const { del:oDel, tot:oTot}=buildComandaData({...lastOrder,items:lastOrder.items}, settings.costoDelivery);
-    const pago = getPagos(lastOrder.tipo).find(m=>m.id===lastOrder.metodoPago)?.label||"";
+    const pago = pagoLabel(lastOrder.metodoPago);
     const itemsTexto = lastOrder.items.map(i=>{
       let linea = `• ${i.qty}× ${i.nombre} — ${fmt((i.precio+cambiosCosto(i.cambios))*i.qty)}`;
       if(i.opcionesStr) linea += `\n  🎯 ${i.opcionesStr}`;
@@ -193,7 +204,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
 
         {/* WhatsApp */}
         <div style={{ paddingTop:24 }}>
-          <a href={`https://wa.me/${settings.whatsappNum}?text=${waText}`} target="_blank" rel="noreferrer"
+          <a href={`https://api.whatsapp.com/send?phone=${settings.whatsappNum}&text=${waText}`} target="_blank" rel="noreferrer"
             style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:10,
               width:"100%",padding:"15px",background:"#25D366",border:"none",
               borderRadius:12,color:"#fff",fontWeight:700,fontSize:15,
@@ -339,7 +350,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             {mostrarOtrasFechas&&(
               <div style={{ marginTop:8,display:"flex",flexDirection:"column",gap:6 }}>
                 {fechas.slice(1).map(f=>{
-                  const sinCupos=getHorariosDisponibles(f.iso, orders, settings.timeSlots, settings.maxPorHorario).length===0;
+                  const sinCupos=getHorariosDisponibles({ ...opcionesCupo, fecha:f.iso }).length===0;
                   const sel=form.fecha===f.iso;
                   return (
                     <button key={f.iso} onClick={()=>{ if(!sinCupos){ handleFechaChange(f.iso); }}}
@@ -372,8 +383,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             ) : (
               <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                 {horariosDisp.map(h=>{
-                  const pedidosEnSlot = orders.filter(o=>o.fecha===form.fecha&&o.horario===h&&o.estado!=="completado").length;
-                  const disponibles = settings.maxPorHorario - pedidosEnSlot;
+                  const disponibles = cupo - pedidosEnBloque(form.fecha, orders, h, form.sucursal, settings.bloqueMinutos);
                   return (
                     <button key={h} onClick={()=>setForm(f=>({...f,horario:h}))}
                       style={{ padding:"8px 16px",borderRadius:8,border:"2px solid",cursor:"pointer",
@@ -391,7 +401,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             )}
           </div>
           <p style={{ color:"#5A5A62",fontSize:11,marginBottom:20 }}>
-            Horario de atención: 17:00 — 21:30 · Máximo {settings.maxPorHorario} pedidos por horario
+            {settings.timeSlots.length>0&&<>Horario de pedidos: {settings.timeSlots[0]} — {settings.timeSlots[settings.timeSlots.length-1]} · </>}Máximo {cupo} pedidos por bloque de {settings.bloqueMinutos} min en {form.sucursal}
           </p>
         </div>
       )}
@@ -458,28 +468,14 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             <label style={{ color:"#8A8A92",fontSize:11,letterSpacing:1,display:"block",marginBottom:8 }}>
               MÉTODO DE PAGO
             </label>
-            {form.tipo==="delivery"&&(
-              <div style={{ background:"#242428",border:"1px solid #34343A",borderRadius:8,
-                padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"center",gap:8 }}>
-                <span style={{ fontSize:16 }}>🔒</span>
-                <div>
-                  <div style={{ color:"#F5F5F5",fontSize:13,fontWeight:700 }}>
-                    Delivery: solo transferencia bancaria
-                  </div>
-                  <div style={{ color:"#7B7B7F",fontSize:11,marginTop:1 }}>
-                    Los pedidos a domicilio se pagan únicamente con transferencia previa.
-                  </div>
-                </div>
-              </div>
-            )}
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               {pagos.map(m=>{
                 const sel = form.metodoPago===m.id;
                 return (
                   <button key={m.id}
-                    onClick={()=>form.tipo!=="delivery"&&setForm(f=>({...f,metodoPago:m.id}))}
+                    onClick={()=>setForm(f=>({...f,metodoPago:m.id}))}
                     style={{ padding:"12px 14px",borderRadius:8,border:"2px solid",
-                      cursor:form.tipo==="delivery"?"default":"pointer",
+                      cursor:"pointer",
                       textAlign:"left",fontSize:13,lineHeight:1.4,
                       borderColor:sel?"#E53935":"#2C2C31",
                       background:sel?"#E5393518":"#0E0E10",
@@ -570,6 +566,27 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
           {submitError}
         </div>
       )}
+      {cupoError&&(
+        <div role="alert" style={{ marginTop:18,padding:"11px 13px",background:"#2A1212",
+          border:"1px solid #6A2A2A",borderRadius:8,color:"#E8B0B0",fontSize:13,lineHeight:1.5 }}>
+          <div style={{ fontWeight:700,marginBottom:6 }}>
+            El bloque {rangoBloque(cupoError.bloque, settings.bloqueMinutos, settings.timeSlots)} ya está lleno ({cupoError.pedidos}/{cupoError.cupo}).
+          </div>
+          {cupoError.propuestas.length>0
+            ? <div style={{ marginBottom:8 }}>Te proponemos:</div>
+            : <div style={{ marginBottom:8 }}>No quedan horarios con cupo este día. Puedes elegir otra fecha.</div>}
+          <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
+            {cupoError.propuestas.map(h=>(
+              <button key={h} onClick={()=>{ setForm(f=>({...f,horario:h})); setCupoError(null); }}
+                style={{ padding:"7px 14px",borderRadius:8,border:"1px solid #E53935",background:"#E5393514",
+                  color:"#F5F5F5",cursor:"pointer",fontSize:13,fontWeight:700 }}>{h}</button>
+            ))}
+            <button onClick={()=>handleSubmit({ forzar:true })} disabled={submitting}
+              style={{ padding:"7px 14px",borderRadius:8,border:"1px solid #6A2A2A",background:"transparent",
+                color:"#E8B0B0",cursor:"pointer",fontSize:13 }}>Agregar igual a las {horarioActivo}</button>
+          </div>
+        </div>
+      )}
       <div style={{ display:"flex",gap:8,marginTop:24 }}>
         {step>1&&(
           <button onClick={()=>setStep(s=>s-1)}
@@ -584,7 +601,7 @@ Pago: ${pago}${lastOrder.observaciones?`\n\nObservaciones: ${lastOrder.observaci
             Continuar →
           </button>
         ):(
-          <button onClick={handleSubmit} disabled={submitting}
+          <button onClick={()=>handleSubmit()} disabled={submitting}
             style={{ flex:2,padding:"14px",background:submitting?"#7A2A2A":"#E53935",border:"none",
               borderRadius:8,color:"#FFFFFF",fontWeight:700,cursor:submitting?"wait":"pointer",fontSize:15 }}>
             {submitting?"Enviando pedido...":"🍣 Confirmar pedido"}

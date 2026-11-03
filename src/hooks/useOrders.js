@@ -7,7 +7,7 @@ import {
   updateOrder as updateOrderService,
 } from "../services/orders.js";
 
-export function useOrders(costoDelivery = 0) {
+export function useOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,12 +30,12 @@ export function useOrders(costoDelivery = 0) {
   }, [load]);
 
   const addOrder = useCallback(
-    async (order) => {
-      const created = await createOrderService(order, costoDelivery);
+    async (order, options) => {
+      const created = await createOrderService(order, options);
       setOrders((prev) => [created, ...prev]);
       return created;
     },
-    [costoDelivery]
+    []
   );
 
   const updStatus = useCallback(async (id, estado) => {

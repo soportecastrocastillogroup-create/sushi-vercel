@@ -251,6 +251,33 @@ function LocalesTab({ data, reload, flash }) {
             <span>Servicios (separados por coma)</span>
             <input value={b.serviciosText} onChange={(e) => edit(b.id, { serviciosText: e.target.value })} placeholder="Retiro en local, Delivery" />
           </label>
+          <label className="field">
+            <span>Pedidos por bloque</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={b.cupo_por_bloque}
+              onChange={(e) => edit(b.id, { cupo_por_bloque: e.target.value })}
+            />
+            <small className="panel-muted">
+              Cuántos pedidos caben en cada bloque (por ejemplo, de 18:00 a 18:30) en este local. La duración del bloque se configura en
+              Datos del negocio. Los bloques llenos se bloquean al tomar pedidos.
+            </small>
+          </label>
+          <label className="field">
+            <span>Pago al repartidor por delivery (CLP)</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={b.pago_repartidor}
+              onChange={(e) => edit(b.id, { pago_repartidor: e.target.value })}
+            />
+            <small className="panel-muted">
+              Lo que se le paga al repartidor por cada delivery (no es lo que se cobra al cliente). Se usa en la cuadratura de caja.
+            </small>
+          </label>
           <button type="submit" className="btn btn--primary btn--sm">
             Guardar {b.name}
           </button>
@@ -266,6 +293,7 @@ function NegocioTab({ data, reload, flash }) {
   const [slots, setSlots] = useState(data.slots);
   const [blocked, setBlocked] = useState(data.blocked);
   const [newSlot, setNewSlot] = useState("");
+  const [rango, setRango] = useState(() => ({ desde: data.slots[0] ?? "17:00", hasta: data.slots.at(-1) ?? "22:00", cada: 15 }));
   const [busy, setBusy] = useState(false);
   const num = (k) => (e) => setSettings({ ...settings, [k]: Math.max(0, parseInt(e.target.value, 10) || 0) });
 
@@ -273,6 +301,23 @@ function NegocioTab({ data, reload, flash }) {
     if (!/^\d{2}:\d{2}$/.test(newSlot) || slots.includes(newSlot)) return;
     setSlots([...slots, newSlot].sort());
     setNewSlot("");
+  };
+
+  // Reemplaza todas las franjas por las de un rango (por ejemplo, 17:00 a 22:00 cada 15 minutos).
+  const generarRango = () => {
+    const aMin = (h) => {
+      const [hh, mm] = h.split(":").map(Number);
+      return hh * 60 + mm;
+    };
+    const desde = aMin(rango.desde);
+    const hasta = aMin(rango.hasta);
+    if (!(hasta >= desde)) return flash("La hora final debe ser igual o posterior a la inicial.", "error");
+    const nuevas = [];
+    for (let m = desde; m <= hasta; m += rango.cada) {
+      nuevas.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+    }
+    if (!window.confirm(`Se reemplazarán los horarios actuales por ${nuevas.length} franjas (${nuevas[0]} a ${nuevas.at(-1)}). Luego guarda los cambios.`)) return;
+    setSlots(nuevas);
   };
 
   const submit = async (e) => {
@@ -321,12 +366,23 @@ function NegocioTab({ data, reload, flash }) {
             <input type="number" min="0" step="1" value={settings.costo_delivery} onChange={num("costo_delivery")} />
           </label>
           <label className="field">
-            <span>Máx. pedidos por horario</span>
-            <input type="number" min="1" value={settings.max_por_horario} onChange={num("max_por_horario")} />
-          </label>
-          <label className="field">
             <span>Máx. cambios por producto</span>
             <input type="number" min="0" value={settings.max_cambios} onChange={num("max_cambios")} />
+          </label>
+        </div>
+        <div className="editor__row">
+          <label className="field">
+            <span>Duración de cada bloque</span>
+            <select value={settings.bloque_minutos} onChange={num("bloque_minutos")}>
+              <option value={30}>30 minutos</option>
+              <option value={60}>1 hora</option>
+            </select>
+            <small className="panel-muted">Las columnas del kanban y los horarios que elige el cliente. El cupo por bloque se configura en cada local.</small>
+          </label>
+          <label className="field">
+            <span>Tiempo de preparación (min)</span>
+            <input type="number" min="5" max="120" step="5" value={settings.minutos_preparacion} onChange={num("minutos_preparacion")} />
+            <small className="panel-muted">Un pedido online hecho ahora queda para dentro de este tiempo (la hora aproximada que ve el cliente).</small>
           </label>
         </div>
 
@@ -349,6 +405,29 @@ function NegocioTab({ data, reload, flash }) {
 
         <fieldset className="field">
           <legend>Horarios de pedido</legend>
+          <div className="inline-add inline-add--range">
+            <label>
+              Desde <input type="time" value={rango.desde} step="900" onChange={(e) => setRango({ ...rango, desde: e.target.value })} />
+            </label>
+            <label>
+              Hasta <input type="time" value={rango.hasta} step="900" onChange={(e) => setRango({ ...rango, hasta: e.target.value })} />
+            </label>
+            <label>
+              Cada{" "}
+              <select value={rango.cada} onChange={(e) => setRango({ ...rango, cada: Number(e.target.value) })}>
+                <option value={15}>15 min</option>
+                <option value={30}>30 min</option>
+                <option value={60}>1 hora</option>
+              </select>
+            </label>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={generarRango} disabled={!rango.desde || !rango.hasta}>
+              Generar horarios
+            </button>
+          </div>
+          <small className="panel-muted">
+            Son las horas de trabajo: desde la primera hasta la última se arman los bloques y se toman pedidos. Para trabajar más
+            horas, genera un rango más amplio. También puedes agregar o quitar una franja suelta.
+          </small>
           <div className="slot-chips">
             {slots.map((s) => (
               <span key={s} className="slot-chip">

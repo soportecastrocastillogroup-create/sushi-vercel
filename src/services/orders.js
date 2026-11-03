@@ -1,5 +1,4 @@
 import { supabase } from "../lib/supabase.js";
-import { cartTotal } from "../utils/cart.js";
 
 function mapOrder(row, items) {
   return {
@@ -19,6 +18,7 @@ function mapOrder(row, items) {
     },
     metodoPago: row.metodo_pago,
     observaciones: row.observaciones || "",
+    total: row.total,
     items: items.map((i) => ({
       cartId: i.cart_id,
       productId: i.product_id,
@@ -51,18 +51,26 @@ export async function fetchOrders() {
   return orders.map((o) => mapOrder(o, o.order_items || []));
 }
 
-export async function createOrder(order, costoDelivery) {
-  const { data: orderNumber, error: numErr } = await supabase.rpc(
-    "get_next_order_number"
-  );
-  if (numErr) throw numErr;
+export async function createOrder(order, { forzar = false } = {}) {
+  // create_order() (security definer) es la única vía para crear pedidos:
+  // asigna el número, calcula el total y guarda pedido e ítems en una sola
+  // transacción.
+  const items = (order.items || order.cart || []).map((i) => ({
+    cartId: i.cartId,
+    productId: i.productId,
+    nombre: i.nombre,
+    precio: i.precio,
+    piezas: i.piezas,
+    cat: i.cat,
+    desc: i.desc || "",
+    cambios: i.cambios || [],
+    opcionesStr: i.opcionesStr || "",
+    obsModal: i.obsModal || "",
+    qty: i.qty || 1,
+  }));
 
-  const total = cartTotal(order.items || order.cart, order.tipo, costoDelivery);
-
-  const { data: row, error } = await supabase
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
+  const { data: row, error } = await supabase.rpc("create_order", {
+    p_order: {
       estado: order.estado || "abierto",
       fuente: order.fuente || "web",
       sucursal: order.sucursal,
@@ -71,37 +79,30 @@ export async function createOrder(order, costoDelivery) {
       referencia: order.referencia || "",
       fecha: order.fecha,
       horario: order.horario,
-      cliente_nombre: order.cliente?.nombre || "",
-      cliente_telefono: order.cliente?.telefono || "",
-      metodo_pago: order.metodoPago || "transferencia",
+      cliente: {
+        nombre: order.cliente?.nombre || "",
+        telefono: order.cliente?.telefono || "",
+      },
+      metodoPago: order.metodoPago || "transferencia",
       observaciones: order.observaciones || "",
-      total,
-    })
-    .select()
-    .single();
+    },
+    p_items: items,
+    p_forzar: forzar,
+  });
   if (error) throw error;
 
-  const items = (order.items || order.cart || []).map((i) => ({
-    order_id: row.id,
-    cart_id: i.cartId,
-    product_id: i.productId,
-    nombre: i.nombre,
-    precio: i.precio,
-    piezas: i.piezas,
-    cat: i.cat,
-    desc_text: i.desc || "",
-    cambios: i.cambios || [],
-    opciones_str: i.opcionesStr || "",
-    obs_modal: i.obsModal || "",
-    qty: i.qty || 1,
-  }));
+  return mapOrder(row, row.order_items || []);
+}
 
-  if (items.length) {
-    const { error: iErr } = await supabase.from("order_items").insert(items);
-    if (iErr) throw iErr;
+// create_order rechaza con SL409 cuando el bloque horario está lleno.
+// Devuelve { hora, pedidos, cupo } o null si el error es otro.
+export function cupoLleno(error) {
+  if (error?.code !== "SL409") return null;
+  try {
+    return JSON.parse(error.details);
+  } catch {
+    return { hora: null, pedidos: null, cupo: null };
   }
-
-  return mapOrder(row, items);
 }
 
 export async function updateOrderStatus(id, estado) {

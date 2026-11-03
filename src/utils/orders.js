@@ -1,3 +1,5 @@
+import { isoLocal } from "./dates.js";
+
 export const labelCompletado = (tipo) =>
   tipo === "delivery" ? "Entregado" : "Recibido";
 
@@ -7,7 +9,7 @@ export const emptyForm = (fuente = "web", defaultBranch = "Loncoche") => ({
   tipo: "retiro",
   direccion: "",
   referencia: "",
-  fecha: new Date().toISOString().split("T")[0],
+  fecha: isoLocal(),
   horario: "",
   cliente: { nombre: "", telefono: "" },
   metodoPago: "transferencia",

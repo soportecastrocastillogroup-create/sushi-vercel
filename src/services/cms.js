@@ -123,7 +123,7 @@ export async function fetchSiteAdmin() {
     supabase.from("branches").select("*").order("sort_order"),
     supabase
       .from("app_settings")
-      .select("costo_delivery, whatsapp_num, max_cambios, max_por_horario, alerta_pedidos")
+      .select("costo_delivery, whatsapp_num, max_cambios, alerta_pedidos, bloque_minutos, minutos_preparacion")
       .eq("id", 1)
       .single(),
     supabase.from("time_slots").select("slot, sort_order").order("sort_order"),
@@ -167,7 +167,14 @@ export async function saveBranchInfo(b) {
   return must(
     await supabase
       .from("branches")
-      .update({ direccion: b.direccion || null, referencia: b.referencia || null, mapa: b.mapa || null, servicios })
+      .update({
+        direccion: b.direccion || null,
+        referencia: b.referencia || null,
+        mapa: b.mapa || null,
+        servicios,
+        cupo_por_bloque: Math.max(1, parseInt(b.cupo_por_bloque, 10) || 1),
+        pago_repartidor: Math.max(0, parseInt(b.pago_repartidor, 10) || 0),
+      })
       .eq("id", b.id)
   );
 }

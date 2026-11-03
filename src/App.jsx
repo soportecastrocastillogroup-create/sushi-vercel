@@ -15,6 +15,12 @@ const UsersPage = lazy(() => import("./panel/UsersPage.jsx"));
 const AccountPage = lazy(() => import("./panel/AccountPage.jsx"));
 const CartaAdminPage = lazy(() => import("./panel/CartaAdminPage.jsx"));
 const SitioAdminPage = lazy(() => import("./panel/SitioAdminPage.jsx"));
+const InventarioPage = lazy(() => import("./panel/InventarioPage.jsx"));
+const IngresarPage = lazy(() => import("./pages/IngresarPage.jsx"));
+const RegistroPage = lazy(() => import("./pages/RegistroPage.jsx"));
+const MiCuentaPage = lazy(() => import("./pages/MiCuentaPage.jsx"));
+const CajaPage = lazy(() => import("./panel/CajaPage.jsx"));
+const SusherosPage = lazy(() => import("./panel/SusherosPage.jsx"));
 const sections = () => import("./panel/sections.jsx");
 const OrdersSection = lazy(() => sections().then((m) => ({ default: m.OrdersSection })));
 const NewOrderSection = lazy(() => sections().then((m) => ({ default: m.NewOrderSection })));
@@ -37,17 +43,23 @@ export default function App() {
               <Route index element={<LandingPage />} />
               <Route path="carta" element={<MenuPage />} />
               <Route path="locales" element={<LocalesPage />} />
+              <Route path="mi-cuenta" element={<MiCuentaPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
             <Route path="login" element={<LoginPage />} />
+            <Route path="ingresar" element={<IngresarPage />} />
+            <Route path="registro" element={<RegistroPage />} />
             <Route path="panel" element={<PanelLayout />}>
               <Route index element={<Navigate to="nuevo-pedido" replace />} />
               <Route path="pedidos" element={<OrdersSection />} />
               <Route path="nuevo-pedido" element={<NewOrderSection />} />
               <Route path="cocina" element={<KitchenSection />} />
+              <Route path="inventario" element={<InventarioPage />} />
+              <Route path="caja" element={<CajaPage />} />
               <Route path="carta" element={<RequireAdmin><CartaAdminPage /></RequireAdmin>} />
               <Route path="sitio" element={<RequireAdmin><SitioAdminPage /></RequireAdmin>} />
               <Route path="reportes" element={<RequireAdmin><ReportsSection /></RequireAdmin>} />
+              <Route path="susheros" element={<RequireAdmin><SusherosPage /></RequireAdmin>} />
               <Route path="usuarios" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
               <Route path="cuenta" element={<AccountPage />} />
             </Route>

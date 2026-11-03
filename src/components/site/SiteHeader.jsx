@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router";
 import { BrandLogo } from "./Brand.jsx";
 import BranchSelect from "./BranchSelect.jsx";
 import { useCart } from "../../context/cart-context.js";
+import { useAuth } from "../../context/auth-context.js";
 import { BagIcon, CloseIcon, InstagramIcon, MenuIcon, UserIcon, WhatsAppIcon } from "./Icons.jsx";
 import { waLink } from "../../utils/whatsapp.js";
 
@@ -11,6 +12,8 @@ const pill = ({ isActive }) => `site-nav__pill${isActive ? " is-active" : ""}`;
 export default function SiteHeader({ whatsappNum, site, branches, branch, onBranchChange }) {
   const [open, setOpen] = useState(false);
   const cart = useCart();
+  const { customer } = useAuth();
+  const cuenta = customer ? { to: "/mi-cuenta", label: "Mi cuenta" } : { to: "/ingresar", label: "Ingresar" };
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && setOpen(false);
@@ -32,17 +35,20 @@ export default function SiteHeader({ whatsappNum, site, branches, branch, onBran
         </nav>
 
         <div className="site-header__actions">
-          <button
-            type="button"
-            className="icon-btn icon-btn--cart"
-            aria-label={cart.count ? `Ver pedido, ${cart.count} productos` : "Ver pedido"}
-            onClick={() => cart.setOpen(true)}
-          >
-            <BagIcon />
-            {cart.count > 0 && <span className="icon-btn__badge">{cart.count}</span>}
-          </button>
-          <Link to="/login" className="icon-btn icon-btn--desktop" aria-label="Acceso del equipo">
+          {customer && (
+            <button
+              type="button"
+              className="icon-btn icon-btn--cart"
+              aria-label={cart.count ? `Ver pedido, ${cart.count} productos` : "Ver pedido"}
+              onClick={() => cart.setOpen(true)}
+            >
+              <BagIcon />
+              {cart.count > 0 && <span className="icon-btn__badge">{cart.count}</span>}
+            </button>
+          )}
+          <Link to={cuenta.to} className="account-link" aria-label={cuenta.label}>
             <UserIcon />
+            <span>{cuenta.label}</span>
           </Link>
           <button
             type="button"
@@ -69,6 +75,8 @@ export default function SiteHeader({ whatsappNum, site, branches, branch, onBran
             <NavLink to="/" end className="drawer__link">Inicio</NavLink>
             <NavLink to="/carta" className="drawer__link">Carta</NavLink>
             <NavLink to="/locales" className="drawer__link">Locales</NavLink>
+            <NavLink to={cuenta.to} className="drawer__link">{cuenta.label}</NavLink>
+            {!customer && <NavLink to="/registro" className="drawer__link">Crear cuenta</NavLink>}
             <div className="drawer__sep" />
             {whatsappNum && (
               <a className="drawer__link drawer__link--icon" href={waLink(whatsappNum)} target="_blank" rel="noreferrer">

@@ -47,7 +47,7 @@ function SiteShell() {
         branches={branches}
         onBranchChange={changeBranch}
         costoDelivery={settings?.costoDelivery}
-        horario={site.horario}
+        blockedWeekdays={settings?.blockedWeekdays}
         whatsappNum={whatsappNum}
       />
     </div>
