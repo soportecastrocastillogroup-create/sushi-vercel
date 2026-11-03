@@ -5,7 +5,7 @@ repositorio. **Léelo completo antes de cambiar código, base de datos o
 despliegues.** Actualízalo cuando cambie una decisión, una ruta, una tabla o el
 estado de una etapa.
 
-- Última actualización: 3 de noviembre de 2026 (revisión de producción antes de publicar y pedidos sin hora).
+- Última actualización: 3 de noviembre de 2026 (**fase 2 publicada en producción**, PR #3).
 - Documento de producto vigente: [`agents/PRD/02-gestion-interna-y-pedidos-online.md`](agents/PRD/02-gestion-interna-y-pedidos-online.md)
   (fase 2). El anterior, [`01-landing-page-y-login.md`](agents/PRD/01-landing-page-y-login.md),
   queda como registro de la fase 1. Cada PRD tiene sus etapas, criterios de
@@ -52,7 +52,7 @@ reemplazo de uno que usara el público.
 | Rama | Estado |
 |---|---|
 | `main` | Producción (Vercel). Incluye el PR #1 (`fix/order-number-conflict`, merge `2e47894`) y el PR #2 (`feature/frontend-propuesta-fase-1`, merge `c046d0b`, 28 sep 2026), con las Etapas A, B y D del PRD 01. **No commitear directo.** |
-| `fase-2` | **Rama de trabajo actual** publicada en GitHub desde el 26 oct 2026 para trabajar desde otro equipo (Vercel no la despliega). Se creó desde `main` en `c046d0b` el 1 oct 2026 para el PRD 02 (gestión interna y pedidos online con cuenta). |
+| `fase-2` | **Rama de trabajo actual**, fusionada en `main` con el PR #3 (merge `c3c6477`, 3 nov 2026). Vercel no la despliega. Se creó desde `main` en `c046d0b` el 1 oct 2026 para el PRD 02 (gestión interna y pedidos online con cuenta). |
 | `fix/order-number-conflict` | Ya fusionada en `main` (PR #1). |
 | `feature/frontend-propuesta-fase-1` | Ya fusionada en `main` (PR #2). |
 
@@ -221,8 +221,9 @@ src/
 
 ## 6. Base de datos
 
-Migraciones en `supabase/migrations/`, todas aplicadas **solo en Pedidos
-Desarrollo**:
+Migraciones en `supabase/migrations/`, todas aplicadas en **Pedidos Desarrollo y
+en producción** (producción desde el 3 nov 2026; las 4 de la fase 1 se
+aplicaron a mano y se registraron con `migration repair`):
 
 | Migración | Contenido |
 |---|---|
@@ -281,16 +282,15 @@ Desarrollo**:
   `supabase/schema.sql` ni el seed de `scripts/generate-schema.mjs` sobre una
   base en uso: sobrescribe lo que editó el cliente. Los cambios de esquema van
   en una migración nueva.
-- Las columnas de PIN de `app_settings` se eliminaron en desarrollo
-  (`20261019180000_secure_orders.sql`). En producción siguen hasta publicar
-  la fase 2. Sus valores (y los del seed) no se escriben en ninguna
+- Las columnas de PIN de `app_settings` se eliminaron en desarrollo y en
+  producción (`20261019180000_secure_orders.sql`). Sus valores (y los del seed) no se escriben en ninguna
   documentación.
 
 ### Seguridad (RLS)
 
 | Quién | Qué puede hacer hoy (Pedidos Desarrollo) |
 |---|---|
-| `anon` | Leer el catálogo, la configuración, el sitio y `product_stock`. **Sin acceso** a `orders`, `order_items` ni `unlocked_dates` (PRD 02 · Etapa 1, 19 oct 2026; en producción sigue abierto hasta publicar) |
+| `anon` | Leer el catálogo, la configuración, el sitio y `product_stock`. **Sin acceso** a `orders`, `order_items` ni `unlocked_dates` (PRD 02 · Etapa 1; en producción desde el 3 nov 2026) |
 | `authenticated` activo con rol | `is_staff()`: operación diaria (stock y fechas; pedidos: leer, editar y borrar, y crear solo con `create_order()`) |
 | `administrador` | `is_admin()`: además escribe el catálogo, la configuración, el sitio y el Storage, y gestiona cuentas vía Edge Function |
 
@@ -356,7 +356,7 @@ Desarrollo**:
 | A · Landing, rutas, carta pública con WhatsApp, locales | ✅ Implementada y verificada en local |
 | B · Login, roles, panel, gestión de cuentas, sin PIN | ✅ Implementada y probada contra Pedidos Desarrollo |
 | D · Autoadministración (carta, fotos, promos, portada, locales, negocio) | ✅ Implementada y probada contra Pedidos Desarrollo |
-| C · Cerrar el acceso de `anon` a pedidos, `create_order` transaccional y borrar las columnas de PIN | ✅ Aplicada en Pedidos Desarrollo como Etapa 1 del PRD 02 (19 oct 2026). Pendiente en producción |
+| C · Cerrar el acceso de `anon` a pedidos, `create_order` transaccional y borrar las columnas de PIN | ✅ Aplicada como Etapa 1 del PRD 02: en desarrollo el 19 oct y en producción el 3 nov 2026 |
 
 **[Verificado, 1 oct 2026]** El frontend de las Etapas A, B y D **ya está en
 producción**: el PR #2 se fusionó en `main` el 28 sep 2026 y
@@ -381,13 +381,23 @@ sus cuentas **antes** del despliegue.
 
 ---
 
-### Estado de la fase 2 (PRD 02, 20 oct 2026)
+### Estado de la fase 2 (PRD 02, 3 nov 2026)
 
-Etapas 0 a 5 terminadas y probadas en Pedidos Desarrollo; Etapa 6 (Susheros) a
-medias; Etapas 7 y 8 pendientes. Todo en la rama `fase-2` (en GitHub desde el 26 oct 2026, sin
-despliegue); **nada publicado en producción**. El estado al día, cómo se hizo cada
-etapa y los pasos para publicar están en las secciones 0 y 10 del
+**[Verificado] Publicada en producción el 3 nov 2026** (00:40–00:50): respaldo
+previo, ensayo sobre una copia local, `migration repair` de la fase 1, 11
+migraciones (`20261019180000` → `20261103120000`), `manage-customers`
+desplegada y merge del PR #3. Los datos se verificaron iguales al respaldo
+(2.240 pedidos, 3.129 ítems, carta con el mismo hash). Auth de producción:
+"Allow new users to sign up" activado y "Confirm email" desactivado.
+Etapas 0 a 5 terminadas; Etapa 6 (Susheros) a medias; Etapas 7 y 8 pendientes.
+Detalle en las secciones 0, 10.10 y la bitácora del
 [PRD 02](agents/PRD/02-gestion-interna-y-pedidos-online.md).
+
+- Respaldo previo a la publicación: `../respaldos-produccion/2026-11-03-antes-fase-2/`
+  (fuera del repositorio; tiene datos personales, no subir).
+- Las siguientes migraciones se aplican en producción con
+  `npx supabase db push --remote=caaqivncmufjrslrqejx` (después de probarlas en
+  desarrollo y con respaldo), sin cambiar el enlace del CLI.
 
 ## 10. Pendientes y datos por confirmar
 

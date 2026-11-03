@@ -12,8 +12,9 @@ export function BrandMark({ size = 28, className = "" }) {
       aria-hidden="true"
     >
       <circle cx="17" cy="17" r="13" fill="var(--brand-red)" />
-      <path d="M9 29 38 3" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M14 30.5 39.5 8" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+      {/* Dos palillos que se cruzan levemente cerca del extremo inferior. */}
+      <path d="M11 30 39 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M13 29.5 34 4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }

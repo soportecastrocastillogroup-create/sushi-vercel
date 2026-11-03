@@ -1525,16 +1525,24 @@
   text-align: center;
 }
 
+/* La foto llena un marco cuadrado (cover, sirve con cualquier proporción) y
+   sus cuatro bordes se difuminan para fundirse con el fondo del hero, sin
+   cantos duros. La máscara combina dos degradados que se intersectan. */
 .hero-slide__photo {
-  width: min(600px, 100%);
-  max-height: 70vh;
+  width: min(560px, 100%);
+  max-height: 72vh;
   aspect-ratio: 1;
-  object-fit: contain;
-  filter: drop-shadow(0 40px 60px rgba(0, 0, 0, 0.7));
+  object-fit: cover;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+    linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 @media (max-width: 760px) {
   .hero-slide__photo {
-    width: min(280px, 72vw);
+    width: min(300px, 78vw);
   }
 }
 
